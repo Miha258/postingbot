@@ -130,12 +130,13 @@ async def set_timeout(message: types.Message, state: FSMContext):
         if re.search(date_time_regex, date_string):
             time = datetime(current_datetime.year, current_datetime.month, current_datetime.day, hour=int(date_string[:2]), minute=int(date_string[3:5]))
             channels[channel]["delay"] = time
-            await message.answer(f"Ви успішно відклали прийом заявок на <b>{time.strftime('%Y-%m-%d %H:%M:%S.%f')}</b>", parse_mode = "html")
+            await message.answer(f"Ви успішно відклали прийом заявок на <b>{time.strftime('%Y-%m-%d %H:%M:%S')}</b>", parse_mode = "html")
     
             delay = channel["delay"]
             await asyncio.create_task(check_timeout(message, delay, channel))
             await state.finish()
-        await message.answer("Невірне значення.Спробуйте ще раз:")
+        else:
+            await message.answer("Невірне значення.Спробуйте ще раз:")
     except:
         await message.answer("Невірне значення.Спробуйте ще раз:")
 
