@@ -109,7 +109,7 @@ async def edit_post_command(callback_query: types.CallbackQuery, state: FSMConte
         case "notify_on" | "notify_off":
             await notification_handler(callback_query, state) 
         case "delay_post":      
-            await message.answer("Введіть час у форматі і виберіть дату: <b>00:00</b>", parse_mode = "html", reply_markup = get_calendar().add(back_to_edit.inline_keyboard[0]))    
+            await message.answer("Введіть час у форматі і виберіть дату: <b>00:00</b>", parse_mode = "html", reply_markup = get_calendar().add(back_to_edit.inline_keyboard[0][0]))    
             await state.set_state(EditStates.DATE)     
         case "create_post":
             await create_post(callback_query.message, state)   
@@ -230,16 +230,10 @@ async def repost_handler(callback_query: types.Message, state: FSMContext):
 async def parse_mode_handler(callback_query: types.CallbackQuery, state: FSMContext):
     parse_mode = callback_query.data
     data["parse_mode"] = parse_mode
-    kb = get_kb()
     await state.set_data({"parse_mode": parse_mode})
-    media = data.get('media')
-    if media:
-        if isinstance(media, types.PhotoSize):
-            await callback_query.message.answer_photo(media.file_id, caption = data["text"], parse_mode = data.get("parse_mode"), reply_markup = kb)
-        elif isinstance(media, types.Video):
-            await callback_query.message.answer_video(media.file_id, caption = data["text"], parse_mode = data.get("parse_mode"), reply_markup = kb)
-    else:
-        await callback_query.message.answer(data["text"], parse_mode = data.get("parse_mode"), reply_markup = kb)
+    
+    kb = get_kb()
+    await callback_query.message.edit_reply_markup(kb)
     await state.set_state(BotStates.EDITING_POST)
     
 
@@ -321,8 +315,7 @@ async def delay_post_handler(message: types.Message, state: FSMContext):
         time = datetime.strptime(date_string, "%H:%M").time()
         date = datetime.combine(date, time)
         if date <= datetime.now():
-            await message.answer(f"Недійсна дата.Спробуйте ще раз")  
-            return
+            return await message.answer(f"Недійсна дата.Спробуйте ще раз")  
         
         data["delay"] = date
         data["delay_str"] = date_string
@@ -375,7 +368,7 @@ async def create_post(message: types.Message, state: FSMContext):
     user_kb = InlineKeyboardMarkup()
 
     if data.get("hidden_extension_btn"):
-        user_kb.add(InlineKeyboardButton(data["hidden_extension_btn"], callback_data="hidden_extension_use"))
+        user_kb.add(InlineKeyboardButton(data["hidden_extension_btn"], callback_data = "hidden_extension_use"))
 
     if data.get("url_buttons"):
         user_kb.add(*data["url_buttons"])
