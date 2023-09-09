@@ -12,6 +12,7 @@ from greet import greeting_request_handler
 import re
 from datetime import datetime
 
+
 request_type = "off"
 options = {
     'Не вибрано': "off", 
@@ -91,17 +92,23 @@ async def set_amount(message: types.Message, state: FSMContext):
         to = int(message.text)
         
         counter = 0
-        for request in requests[:to]:
-            try:
-                counter += 1
-                await request.approve()
-            except:
-                continue
+        if requests:
+            if len(requests) < to:
+                to = len(requests)
 
-        await message.answer(f"Прийнято <b>{counter}</b> заявок", parse_mode = "html")
-        await mode_selector(message)
+            for request in requests[:to]:
+                try:
+                    counter += 1
+                    await request.approve()
+                except:
+                    continue
+
+            await message.answer(f"Прийнято <b>{counter}</b> заявок", parse_mode = "html")
+            await mode_selector(message)
+        else:
+            await message.answer(f"Мій список заявок в цей канал пустий.Спробуйте пізніше", parse_mode = "html")
         await state.finish()
-    except:
+    except ValueError:
         await message.answer("Невірне значення.Спробуйте ще раз:")
 
 async def check_timeout(message: types.Message, delay: datetime, channel_id: str):

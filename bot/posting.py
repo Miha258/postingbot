@@ -69,7 +69,7 @@ def get_kb():
 
 async def process_new_post(message: types.Message, state: FSMContext):
     data.clear()
-    data["text"] = "Редагуйте текст"
+    data["text"] = None
     data["url_buttons"] = []
     data["comments"] = "comments_on"
     data["notify"] = "notify_on"
@@ -86,7 +86,7 @@ async def edit_post_command(callback_query: types.CallbackQuery, state: FSMConte
     match query:
         case "edit_text":
             await state.set_state(EditStates.EDITING_TEXT)
-            await message.answer("Введіть новий текст поста:")
+            await message.answer("Введіть новий текст поста:", reply_markup = back_to_edit)
         case "attach_media":
             await state.set_state(EditStates.ATTACHING_MEDIA)
             await message.answer("Надішліть мені фото/відео:")
@@ -96,20 +96,20 @@ async def edit_post_command(callback_query: types.CallbackQuery, state: FSMConte
             await remove_hidden_extension(callback_query, state)
         case "hidden_extension":
             await state.set_state(EditStates.HIDDEN_EXTENSION_BTN)
-            await message.answer("Введіть назву кнопки з призованим продовженням:")  
+            await message.answer("Введіть назву кнопки з призованим продовженням:", reply_markup = back_to_edit)  
         case "comments_off" | "comments_on":
             await comments_handler(callback_query, state)
         case "markdown" | "html":
             await parse_mode_handler(callback_query, state)
         case "url_buttons":
             await state.set_state(EditStates.URL_BUTTONS)
-            await message.answer("Введіть текст у форматі: Назва кнопки - посилання") 
+            await message.answer("Введіть текст у форматі: Назва кнопки - посилання", reply_markup = back_to_edit) 
         case "remove_url_buttons":
             await remove_url_button_handler(callback_query, state) 
         case "notify_on" | "notify_off":
             await notification_handler(callback_query, state) 
         case "delay_post":      
-            await message.answer("Введіть час у форматі і виберіть дату: <b>00:00</b>", parse_mode = "html", reply_markup = get_calendar())    
+            await message.answer("Введіть час у форматі і виберіть дату: <b>00:00</b>", parse_mode = "html", reply_markup = get_calendar().add(back_to_edit.inline_keyboard[0][0]))    
             await state.set_state(EditStates.DATE)     
         case "create_post":
             await create_post(callback_query.message, state)   
@@ -120,6 +120,8 @@ async def edit_post_command(callback_query: types.CallbackQuery, state: FSMConte
 
 
 async def editing_text_handler(message: types.Message, state: FSMContext):
+    if not data["text"]:
+        data["media"] = message.photo[-1] if message.photo else message.video
     data["text"] = message.text or message.caption or ""
     media = data.get("media")
     
@@ -394,6 +396,7 @@ async def create_post(message: types.Message, state: FSMContext):
         await message.answer(f'<b><a href="{post.url}">Пост</a> успішно опублікований!</b>', parse_mode = 'html')
     data.clear()
 
+
 async def notification_handler(callback_query: types.CallbackQuery, state: FSMContext):
     status = callback_query.data  
     
@@ -401,6 +404,20 @@ async def notification_handler(callback_query: types.CallbackQuery, state: FSMCo
     kb = get_kb()
     await callback_query.message.edit_reply_markup(reply_markup = kb)
     await state.set_state(BotStates.EDITING_POST)
+
+
+async def back_to_editing(callback_query: types.CallbackQuery, state: FSMContext):
+    media = data.get("media")
+    kb = get_kb()
+    if media:
+        if isinstance(media, types.PhotoSize):
+            await callback_query.message.answer_photo(media.file_id, caption = data["text"], parse_mode = data.get("parse_mode"), reply_markup = kb)
+        elif isinstance(media, types.Video):
+            await callback_query.message.answer_video(media.file_id, caption = data["text"], parse_mode = data.get("parse_mode"), reply_markup = kb)
+    else:
+        await callback_query.message.answer(data["text"], parse_mode = data.get("parse_mode"), reply_markup = kb)
+    await state.set_state(BotStates.EDITING_POST)
+
 
     
 def register_posting(dp: Dispatcher):
@@ -416,3 +433,4 @@ def register_posting(dp: Dispatcher):
     dp.register_message_handler(delay_post_handler, state = EditStates.DATE) 
     dp.register_callback_query_handler(choose_date_handler, lambda cb: "calendar_day" in cb.data, state = EditStates.DATE)
     dp.register_callback_query_handler(set_calendar_month, lambda cb: cb.data in ["prev_month", "next_month"], state = EditStates.DATE)
+    dp.register_callback_query_handler(back_to_editing, lambda cb: "back_to_edit" in cb.data, state = "*")

@@ -43,9 +43,10 @@ if __name__ == '__main__':
     if bot_type == "inviting":
         register_request(dp)
         register_greet(dp)
+        register_adds(dp)
     elif bot_type == "posting": 
         register_posting(dp)
+        
     register_paynaments(dp)
     register_channels(dp)
-    register_adds(dp)
     executor.start_polling(dp, skip_updates = True)
