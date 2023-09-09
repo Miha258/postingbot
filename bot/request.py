@@ -110,7 +110,7 @@ async def check_timeout(message: types.Message, delay: datetime, channel_id: str
         await asyncio.sleep(10)
     
     channels[channel_id]["delay"] = None
-    requests = channels[channel]["requests"]
+    requests = channels[channel_id]["requests"]
     counter = 0
     for request in requests:
         try:
@@ -121,7 +121,7 @@ async def check_timeout(message: types.Message, delay: datetime, channel_id: str
     await message.answer(f"Прийнято <b>{counter}</b> заявок", parse_mode = "html")
 
 async def set_timeout(message: types.Message, state: FSMContext):
-    try:
+    # try:
         channel = get_channel()
         current_datetime = datetime.today()
         date_time_regex = r'\d{2}:\d{2}'
@@ -131,14 +131,12 @@ async def set_timeout(message: types.Message, state: FSMContext):
             time = datetime(current_datetime.year, current_datetime.month, current_datetime.day, hour=int(date_string[:2]), minute=int(date_string[3:5]))
             channels[channel]["delay"] = time
             await message.answer(f"Ви успішно відклали прийом заявок на <b>{time.strftime('%Y-%m-%d %H:%M:%S')}</b>", parse_mode = "html")
-    
-            delay = channel["delay"]
-            await asyncio.create_task(check_timeout(message, delay, channel))
+            await asyncio.create_task(check_timeout(message, time, channel))
             await state.finish()
         else:
             await message.answer("Невірне значення.Спробуйте ще раз:")
-    except:
-        await message.answer("Невірне значення.Спробуйте ще раз:")
+    # except:
+    #     await message.answer("Невірне значення.Спробуйте ще раз:")
 
 
 async def join_request_handler(request: types.ChatJoinRequest):
