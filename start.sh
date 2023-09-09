@@ -1,14 +1,16 @@
 #!/bin/bash
 
-dir="root/postingbot"
+TARGET_PROCESS="python3.*bot/main.py"
+PIDS=$(ps aux | grep "$TARGET_PROCESS" | grep -v 'grep' | awk '{print $2}')
 
-for p in /proc/[0-9]*; do
-    cwd=$(cat "$p/cmdline" 2>/dev/null | tr '\0' ' ')
-    echo $cwd
-    if [[ "$dir" == "$cwd" ]]; then
-        pid="${p#/proc/}"
-        echo "Killing process with PID $pid"
-        kill "$pid"
-    fi
-done
+if [ -z "$PIDS" ]; then
+  echo "No processes found matching the criteria."
+else
+  for PID in $PIDS; do
+    echo "Killing process with PID: $PID"
+    kill "$PID"
+  done
+  echo "Processes have been killed."
+fi
+
 nohup python3 main.py &
