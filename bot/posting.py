@@ -109,7 +109,7 @@ async def edit_post_command(callback_query: types.CallbackQuery, state: FSMConte
         case "notify_on" | "notify_off":
             await notification_handler(callback_query, state) 
         case "delay_post":      
-            await message.answer("Введіть час у форматі і виберіть дату: <b>00:00</b>", parse_mode = "html", reply_markup = get_calendar().add(back_to_edit.inline_keyboard[0][0]))    
+            await message.answer("Введіть час у форматі і виберіть дату: <b>00:00</b>", parse_mode = "html", reply_markup = get_calendar().add(back_to_edit.inline_keyboard[0]))    
             await state.set_state(EditStates.DATE)     
         case "create_post":
             await create_post(callback_query.message, state)   
@@ -410,12 +410,13 @@ async def back_to_editing(callback_query: types.CallbackQuery, state: FSMContext
     media = data.get("media")
     kb = get_kb()
     if media:
+        await callback_query.message.delete()
         if isinstance(media, types.PhotoSize):
             await callback_query.message.answer_photo(media.file_id, caption = data["text"], parse_mode = data.get("parse_mode"), reply_markup = kb)
         elif isinstance(media, types.Video):
             await callback_query.message.answer_video(media.file_id, caption = data["text"], parse_mode = data.get("parse_mode"), reply_markup = kb)
     else:
-        await callback_query.message.answer(data["text"], parse_mode = data.get("parse_mode"), reply_markup = kb)
+        await callback_query.message.edit_text(data["text"], parse_mode = data.get("parse_mode"), reply_markup = kb)
     await state.set_state(BotStates.EDITING_POST)
 
 
