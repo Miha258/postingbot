@@ -11,6 +11,7 @@ else
   first_element_trimmed=$(echo "$first_element" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
   MAIN_P="$first_element_trimmed"
 
+  echo "Killing main process with PID: $MAIN_P"
   kill "$MAIN_P"
   for PID in $PIDS; do
     echo "Killing process with PID: $PID"
