@@ -21,8 +21,3 @@ else
 fi
 
 nohup python3 main.py &
-
-
-PIDS=$(ps aux | grep "$TARGET_PROCESS" | grep -v 'grep' | awk '{print $2}')
-MAIN_P=$(ps -o ppid= -p ${PIDS[0]})
-echo $MAIN_P

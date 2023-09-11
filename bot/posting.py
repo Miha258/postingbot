@@ -402,7 +402,7 @@ async def notification_handler(callback_query: types.CallbackQuery, state: FSMCo
 async def back_to_editing(callback_query: types.CallbackQuery, state: FSMContext):
     media = data.get("media")
     kb = get_kb()
-    if media:
+    if media: 
         await callback_query.message.delete()
         if isinstance(media, types.PhotoSize):
             await callback_query.message.answer_photo(media.file_id, caption = data["text"], parse_mode = data.get("parse_mode"), reply_markup = kb)

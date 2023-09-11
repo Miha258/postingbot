@@ -16,7 +16,6 @@ class BotStates(StatesGroup):
 class BotAdds(StatesGroup):
     MEDIA = State()
     BTN = State()
-    TEXT = State()
     CHECK = State()
 
 class EditStates(StatesGroup):

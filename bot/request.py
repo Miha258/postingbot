@@ -3,7 +3,6 @@ import asyncio
 from aiogram import types
 from aiogram.dispatcher import Dispatcher
 from aiogram.dispatcher import FSMContext
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from utils import *
 from states import BotStates
 from db.account import Bots
@@ -137,7 +136,7 @@ async def set_timeout(message: types.Message, state: FSMContext):
         if re.search(date_time_regex, date_string):
             time = datetime(current_datetime.year, current_datetime.month, current_datetime.day, hour=int(date_string[:2]), minute=int(date_string[3:5]))
             channels[channel]["delay"] = time
-            await message.answer(f"Ви успішно відклали прийом заявок на <b>{time.strftime('%Y-%m-%d %H:%M:%S')}</b>", parse_mode = "html")
+            await message.answer(f"Ви успішно відклали прийом заявок на <b>{time.strftime('%Y-%m-%d %H:%M')}</b>", parse_mode = "html")
             await asyncio.create_task(check_timeout(message, time, channel))
             await state.finish()
         else:
