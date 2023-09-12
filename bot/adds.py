@@ -75,6 +75,8 @@ async def send_adds_to_users(message: types.Message, state: FSMContext):
                 except:
                     pass
             await message.answer(f"Розсилка відбулася успішно.Кількість надсилань: <b>{counter}</b>", reply_markup = main_menu(), parse_mode = "html")
+        else:
+            await message.answer(f"База даних бота пуста.Спробуйте пізніше", reply_markup = main_menu())
     await state.finish()
 
 def register_adds(dp: Dispatcher):
