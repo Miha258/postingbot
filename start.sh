@@ -21,3 +21,4 @@ else
 fi
 
 nohup python3 main.py &
+ps aux | grep python3
