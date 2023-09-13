@@ -360,7 +360,7 @@ async def send_post(message: types.Message, user_kb: InlineKeyboardMarkup):
 async def send_post_with_delay(message: types.Message, delay: int, user_kb: InlineKeyboardMarkup):
     while datetime.now() < delay:
         await asyncio.sleep(3)
-    post = await send_post(message, user_kb, message.message_id)
+    post = await send_post(message, user_kb)
     await message.edit_text(f'<b><a href="{post.url}">Пост</a> успішно опублікований!</b>', parse_mode = 'html')
 
 
