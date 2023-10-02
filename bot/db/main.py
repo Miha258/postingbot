@@ -11,11 +11,11 @@ class DB:
         self.db_file = db_file
 
     async def __call__(self):
-        self.conn = await aiosqlite.connect(self.db_file)
+        self.conn = await aiosqlite.connect(self.db_file, check_same_thread = False)
         self.conn.isolation_level = None
         self.cursor = await self.conn.cursor()
         return self
-
+    
     async def create_table(self, name: str, schema: dict):
         column_definitions = ', '.join([f'{column} {data_type}' for column, data_type in schema.items()])
         query = f"CREATE TABLE IF NOT EXISTS {name} ({column_definitions})"

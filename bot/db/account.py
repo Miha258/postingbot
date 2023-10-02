@@ -19,6 +19,9 @@ class Table:
     
     def __getitem__(self, key):
         return self.data[key]
+    
+    def to_dict(self):
+        return self.data
 
     @classmethod
     async def init_table(cls, table_data: dict):
@@ -29,7 +32,6 @@ class Table:
         data = await posting.read_record(cls.table, by, value, all)
         if all:
             return [Table(**record) for record in data ] if data else None
-        
         return Table(**data) if data else None
     
     @classmethod
@@ -40,10 +42,11 @@ class Table:
     @classmethod
     async def update(cls, by: int, value, **kwargs):
         await posting.update_record(cls.table, by, value, kwargs)
+        return await cls.get(by, value)
     
     @classmethod
-    async def delete(cls, **kwargs):
-        await posting.delete_record(cls.table, kwargs)
+    async def delete(cls, id):
+        await posting.delete_record(cls.table, id)
 
 
 
@@ -59,5 +62,69 @@ class Channels(Table):
 class Users(Table):
     table = "users"
 
+class Posts(Table):
+    table = "posts"
 
-  
+
+    @classmethod
+    async def save_post(
+        cls,
+        id: int,
+        bot_id: int,
+        channel_id: str,
+        post_text: str,
+        media: bytes | None,
+        hidden_extension_text_1: str | None,
+        hidden_extension_text_2: str | None,
+        hidden_extension_btn: str | None, 
+        url_buttons: list | None,
+        parse_mode: str | None,
+        comments: bool | None,
+        notify: bool | None,
+    ):
+        url_buttons = "\n".join(url_buttons ) if url_buttons else None
+        await cls(id, 
+            bot_id = bot_id, 
+            channel_id = channel_id,
+            post_text = post_text,
+            media = media,
+            hidden_extension_text_1 = hidden_extension_text_1,
+            hidden_extension_text_2 = hidden_extension_text_2,
+            hidden_extension_btn = hidden_extension_btn,
+            url_buttons = url_buttons,
+            parse_mode = parse_mode,
+            comments = comments,
+            notify = notify
+        )()
+    @classmethod
+    async def edit_post(
+        cls,
+        id: int,
+        post_text: str | None,
+        media: bytes | None,
+        hidden_extension_text_1: str | None,
+        hidden_extension_text_2: str | None,
+        hidden_extension_btn: str | None, 
+        url_buttons: list | None,
+        parse_mode: str | None,
+        comments: bool | None,
+        notify: bool | None,
+    ):
+        await cls.update(
+            "id",
+            id,
+            post_text = post_text,
+            media = media,
+            hidden_extension_text_1 = hidden_extension_text_1,
+            hidden_extension_text_2 = hidden_extension_text_2,
+            hidden_extension_btn = hidden_extension_btn,
+            url_buttons = url_buttons,
+            parse_mode = parse_mode,
+            comments = comments,
+            notify = notify
+        )
+
+class Greetings(Table):
+    table = "greetings"
+
+

@@ -13,8 +13,10 @@ from aiogram.dispatcher import FSMContext
 from paynaments import register_paynaments
 from db.account import *
 
+
 logging.basicConfig(level = logging.INFO)
 dp = Dispatcher(bot, storage = storage) 
+
 
 @dp.message_handler(IsAdminFilter(), commands = ['start'], state = "*")   
 async def start_command(message: types.Message, state: FSMContext):
@@ -46,7 +48,7 @@ if __name__ == '__main__':
         register_adds(dp)
     elif bot_type == "posting": 
         register_posting(dp)
-        
+  
     register_paynaments(dp)
     register_channels(dp)
     executor.start_polling(dp, skip_updates = True)

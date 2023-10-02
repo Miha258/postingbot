@@ -5,7 +5,7 @@ from aiogram.dispatcher.filters.state import State, StatesGroup
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, KeyboardButton
 from aiogram.dispatcher import FSMContext
 from aiogram import executor
-from bot.db.account import Bots, Paynaments, Channels, Users
+from bot.db.account import Bots, Paynaments, Channels, Users, Posts, Greetings
 import logging
 
 logging.basicConfig(level = logging.INFO)
@@ -48,7 +48,7 @@ async def newbot_command_handler(message: types.Message, state: FSMContext):
     """, parse_mode = "html", reply_markup = main_kb) 
 
 
-@dp.message_handler(text = "Створити бота")
+@dp.message_handler(text = "Створити бота", commands = ['/addbot'])
 async def get_bots(message: types.Message, state: FSMContext):
     await state.set_state(BotStates.TYPE)
     
@@ -56,11 +56,11 @@ async def get_bots(message: types.Message, state: FSMContext):
     await message.answer(f'<b>Оберіть тип бота:</b>', parse_mode = "html", reply_markup = kb)
     
 
-@dp.message_handler(text = "Мої боти", state = "*")
+@dp.message_handler(text = "Мої боти", commands = ['/mybots'], state = "*")
 async def get_bots(message: types.Message):
     bots = await Bots.get("user_id", message.from_id, True)
     if not bots:
-        return await message.answer(f'<b>У вас немає ботів.Стовріть його, нажавши кнопку "Створити бота"</b>', parse_mode = "html")
+        return await message.answer(f'<b>У вас немає ботів.Створіть його, нажавши кнопку "Створити бота"</b>', parse_mode = "html")
     
     bots = '\n'.join([(await Bot(_bot["token"]).get_me()).mention for _bot in bots])
     await message.answer(f'<b>Список ваших ботів: \n\n{bots}</b>', parse_mode = "html")
@@ -99,7 +99,7 @@ async def process_newbot_token(message: types.Message, state: FSMContext):
 
     bot = Bot(token = new_bot_token)
     bot = await bot.get_me()
-    await message.reply(f'{bot.mention} запущений.Використвуйте /start для почтку роботи.Викорисутовуйте /bots, щоб відкрити список ботів', reply_markup = main_kb)
+    await message.reply(f'{bot.mention} запущений.Використвуйте /start для початку роботи.Викорисутовуйте /bots, щоб відкрити список ботів', reply_markup = main_kb)
     await Bots(bot.id, user_id = message.from_id, token = message.text, type = type)()
     await state.finish()  
 
@@ -135,6 +135,32 @@ async def start_bots(_):
         "id": "INT",
         "bot_id": "INT"
     })
+
+    await Greetings.init_table({
+        "id": "INT",
+        "bot_id": "INT",
+        "channel_id": "TEXT",
+        "greet_text": "TEXT",
+        "autodelete": "INT",
+        "delay": "INT",
+        "buttons": "TEXT",
+        "image": "BLOB"
+    })
+
+    await Posts.init_table({
+        "id": "INT",
+        "bot_id": "INT",
+        "channel_id": "TEXT", 
+        "post_text": "TEXT",
+        "media": "BLOB",
+        "hidden_extension_text_1": "TEXT",
+        "hidden_extension_text_2": "TEXT",
+        "hidden_extension_btn": "TEXT",
+        "url_buttons": "TEXT",
+        "parse_mode": "TEXT",
+        "comments": "BOOLEAN",
+        "notify": "BOOLEAN"
+    })
     
     user_bots = await Bots.all()
     if user_bots:
@@ -167,4 +193,4 @@ async def stop_bots(_):
             ]]))
 
 if __name__ == '__main__':
-    executor.start_polling(dp, on_startup = start_bots, on_shutdown = stop_bots)    
+    executor.start_polling(dp, on_startup = start_bots, on_shutdown = stop_bots)

@@ -7,11 +7,11 @@ class BotStates(StatesGroup):
     ADDING_CHANNEL = State()
     BOT_CHECKING = State()
     CHAT_GPT = State()
-    SET_GREED_TEXT = State()
     SET_CHANNEL = State()
     CHOOSE_CHANNEL = State()
     AMOUNT = State()
     TIMEOUT = State()
+    CHANGE_POST = State()
 
 class BotAdds(StatesGroup):
     MEDIA = State()
@@ -31,4 +31,14 @@ class EditStates(StatesGroup):
     URL_BUTTONS = State()
     TIME = State()
     DATE = State()
+    COMFIRM = State()
 
+class CustomGreetSatates(StatesGroup):
+    MEDIA = State()
+    BUTTONS = State()
+    EDIT_BUTTONS = State()
+    EDIT_DELAY = State()
+    EDIT_AUTODELETE = State()
+    EDIT_TEXT = State()
+    EDIT_MEDIA = State()
+    GREET_EDITING = State()

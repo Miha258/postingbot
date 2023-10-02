@@ -5,6 +5,13 @@ back_btn = InlineKeyboardButton('Повернутися в меню', callback_d
 back_to_edit = InlineKeyboardMarkup(inline_keyboard = [
     [InlineKeyboardButton('Повернутися до редагування', callback_data = "back_to_edit")]
 ])
+make_new_post_kb = InlineKeyboardMarkup(inline_keyboard = [
+    [InlineKeyboardButton('Створити ще один пост', callback_data = 'create_post_again')]
+])
+confirm_post_kb = InlineKeyboardMarkup(inline_keyboard = [
+    [InlineKeyboardButton('Скасувати', callback_data = 'cancle_post')],
+    [InlineKeyboardButton('Підтвердити', callback_data = 'create_post')]
+])
 
 def main_menu():
     buttons = []
@@ -14,7 +21,8 @@ def main_menu():
         buttons.append(KeyboardButton('Керування заявками'))
         buttons.append(KeyboardButton('Розсилка'))
     elif bot_type == "posting":
-        buttons.append(KeyboardButton('Постинг'))
+        buttons.append(KeyboardButton('с'))
+        buttons.append(KeyboardButton('Редагувати пост'))
 
     
     markup = ReplyKeyboardMarkup(resize_keyboard = True, keyboard = [
@@ -41,3 +49,4 @@ def check_add_menu():
     keyboard.add(KeyboardButton('Редагувати'))
     keyboard.add(KeyboardButton('Повернутися в меню'))
     return keyboard
+

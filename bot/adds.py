@@ -16,7 +16,7 @@ async def skip_btn(message: types.Message, state: FSMContext):
 
 
 async def ask_for_btn(message: types.Message, state: FSMContext):
-    await state.update_data({'text': message.caption or message.text        , 'media': message.photo[-1] if message.photo else message.video})
+    await state.update_data({'text': message.caption or message.text, 'media': message.photo[-1] if message.photo else message.video})
     await state.set_state(BotAdds.BTN)
     await message.reply("Введіть кнопку у форматі: \n<em>1. Кнопка - посилання</em>\n<em>2. Кнопка - посилання</em>\n<em>3. Кнопка - посилання</em>", reply_markup = skip_menu(), parse_mode = "html")
 
@@ -78,6 +78,7 @@ async def send_adds_to_users(message: types.Message, state: FSMContext):
         else:
             await message.answer(f"База даних бота пуста.Спробуйте пізніше", reply_markup = main_menu())
     await state.finish()
+
 
 def register_adds(dp: Dispatcher):
     dp.register_message_handler(ask_media, lambda m: m.text == "Розсилка", state = "*")
