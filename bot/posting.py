@@ -13,7 +13,7 @@ from utils import *
 from keyboards import *
 import calendar
 from db.account import Posts
-from channels import IsAdminFilter
+from utils import IsAdminFilter
 
 
 data = {}

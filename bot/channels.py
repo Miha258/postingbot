@@ -1,6 +1,6 @@
 from db.account import Channels
 from db.account import Bots
-from create_bot import bot, set_channel, owner
+from create_bot import bot, set_channel
 from aiogram import types, Dispatcher
 from states import *
 from aiogram.dispatcher import FSMContext
@@ -9,21 +9,16 @@ from aiogram.utils.callback_data import CallbackData
 from posting import process_new_post
 from aiogram.utils.exceptions import Unauthorized
 from request import mode_selector
-from aiogram.dispatcher.filters import BoundFilter
 from keyboards import *
 from datetime import datetime
 from greet import greet_menu
-
+from utils import IsAdminFilter
 
 channel_type = {
     "Постинг": "createpost",
     "Керування заявками": "request",
     "Привітання": "greet",
 }
-
-class IsAdminFilter(BoundFilter):
-    async def check(self, message: types.Message) -> bool:
-        return message.from_user.id == int(owner)
 
 async def choose_channels(message: types.Message, state: FSMContext):
     channels = await Channels.get("bot_id", bot.id, True)
@@ -121,10 +116,6 @@ channel_type = {
     "Керування заявками": "request",
     "Привітання": "greet",
 }
-
-class IsAdminFilter(BoundFilter):
-    async def check(self, message: types.Message) -> bool:
-        return message.from_user.id == int(owner)
 
 async def choose_channels(message: types.Message, state: FSMContext):
     channels = await Channels.get("bot_id", bot.id, True)
