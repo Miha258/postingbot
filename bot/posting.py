@@ -227,16 +227,14 @@ async def init_hidden_extension_handler(message: types.Message, state: FSMContex
     await state.set_state(BotStates.EDITING_POST)
     
 
-async def comments_handler(callback_query: types.CallbackQuery, state: FSMContext):
-    status = callback_query.data  
+async def comments_handler(callback_query: types.CallbackQuery, state: FSMContext): 
     data["comments"] = not data["comments"]
     kb = get_kb()
     await callback_query.message.edit_reply_markup(reply_markup = kb)
     await state.set_state(BotStates.EDITING_POST)
 
 
-async def watermark_handler(callback_query: types.CallbackQuery, state: FSMContext):
-    status = callback_query.data  
+async def watermark_handler(callback_query: types.CallbackQuery, state: FSMContext):  
     data["watermark"] = not data["watermark"]
     kb = get_kb()
     await callback_query.message.edit_reply_markup(reply_markup = kb)
@@ -244,7 +242,6 @@ async def watermark_handler(callback_query: types.CallbackQuery, state: FSMConte
     
 
 async def repost_handler(callback_query: types.Message, state: FSMContext):
-    status = callback_query.data  
     data["reposts"] = not data["reposts"]
     kb = get_kb()
     await callback_query.message.edit_reply_markup(reply_markup = kb)
@@ -337,6 +334,7 @@ async def delay_post_handler(message: types.Message, state: FSMContext):
             data.get("url_buttons"),
             data.get("parse_mode"),
             data.get('comments'),
+            data.get('watermark'),
             data.get('notify'),
             data.get('delay')
         )
