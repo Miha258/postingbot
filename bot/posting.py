@@ -1,6 +1,6 @@
 from create_bot import bot, get_channel
 import asyncio
-from aiogram.utils.exceptions import Unauthorized, MessageCantBeDeleted
+from aiogram.utils.exceptions import Unauthorized, MessageNotModified
 from aiogram.utils.callback_data import CallbackData
 from aiogram import types, Dispatcher
 from aiogram.dispatcher import FSMContext
@@ -11,32 +11,27 @@ from datetime import datetime
 from states import *
 from utils import *
 from keyboards import *
-import calendar
 from db.account import Posts
 from utils import IsAdminFilter
 
-
 data = {}
-months = [
-    "Січень", "Лютий", "Березень", "Квітень", "Травень", "Червень",
-    "Липень", "Серпень", "Вересень", "Жовтень", "Листопад", "Грудень"
-]
 
 def get_kb():
     kb = InlineKeyboardMarkup(inline_keyboard = [
     [
         InlineKeyboardButton("Змінити текст", callback_data = "edit_text"),
         InlineKeyboardButton("Відкріпити медіа", callback_data = "disattach_media") if data.get("media") else InlineKeyboardButton("Прикріпити медіа", callback_data = "attach_media")
+        
     ],
     [
         InlineKeyboardButton("URL-кнопки", callback_data = "url_buttons"),
         InlineKeyboardButton("Парсинг: HTML", callback_data = "markdown") if data.get("parse_mode") == "html" else InlineKeyboardButton("Парсинг: Markdown", callback_data = "html"),
     ],
     [
-        InlineKeyboardButton("Увімкнути  коментарі", callback_data = "comments_on") if data["comments"] == "comments_off" else InlineKeyboardButton("Вимкнути коментарі", callback_data = "comments_off")
+        InlineKeyboardButton("Увімкнути  коментарі", callback_data = "comments_on") if not data["comments"] else InlineKeyboardButton("Вимкнути коментарі", callback_data = "comments_off")
     ],
     [
-        InlineKeyboardButton("🔕", callback_data = "notify_on") if data["notify"] == "notify_off" else InlineKeyboardButton("🔔", callback_data = "notify_off")
+        InlineKeyboardButton("Додати автопідпис", callback_data = "watermark_on") if not data["watermark"] else InlineKeyboardButton("Прибрати автопідпис", callback_data = "watermark_off")
     ],
     [InlineKeyboardButton("Відредагувати", callback_data = "change_post_data")] if data.get('is_editing') else [
         InlineKeyboardButton("Відкласти", callback_data = "delay_post"),
@@ -44,7 +39,22 @@ def get_kb():
     ]
     ])
     kb.add(back_btn)
+
+    if not data.get('is_editing'):
+        kb.inline_keyboard.insert(len(kb.inline_keyboard) - 1,[
+            InlineKeyboardButton(
+                "🔕", 
+                callback_data = "notify_on"
+        ) if not data["notify"] else 
+            InlineKeyboardButton(
+                "🔔", 
+                callback_data = "notify_off"
+        )])
     
+    if data.get('is_editing') and data.get('media'):
+        remove_button_by_callback_data("disattach_media", kb)
+        kb.inline_keyboard.insert(0, [InlineKeyboardButton("Замінити медіа", callback_data = "attach_media")])
+
     url_buttons = data.get("url_buttons")
     if url_buttons:
         for i, btn in enumerate(url_buttons):
@@ -72,8 +82,9 @@ async def process_new_post(message: types.Message, state: FSMContext):
     data.clear()
     data["text"] = None
     data["url_buttons"] = []
-    data["comments"] = "comments_on"
-    data["notify"] = "notify_on"
+    data["watermark"] = False
+    data["comments"] = False
+    data["notify"] = False
     data["parse_mode"] = "html"
     data["media"] = None
     await message.answer("Надішліть текст, картику або відео поста")
@@ -98,6 +109,8 @@ async def edit_post_command(callback_query: types.CallbackQuery, state: FSMConte
         case "hidden_extension":
             await state.set_state(EditStates.HIDDEN_EXTENSION_BTN)
             await message.answer("Введіть назву кнопки з прихованим продовженням:", reply_markup = back_to_edit)  
+        case "watermark_off" | "watermark_on":
+            await watermark_handler(callback_query, state)
         case "comments_off" | "comments_on":
             await comments_handler(callback_query, state)
         case "markdown" | "html":
@@ -124,9 +137,9 @@ async def edit_post_command(callback_query: types.CallbackQuery, state: FSMConte
 async def editing_text_handler(message: types.Message, state: FSMContext):
     if not data["text"]:
         data["media"] = message.photo[-1] if message.photo else message.video
-    data["text"] = message.text or message.caption or ""
-    media = data.get("media")
     
+    data["text"] = message.text or message.caption 
+    media = data.get("media")
     kb = get_kb()
     if media:
         if isinstance(media, types.PhotoSize):
@@ -216,7 +229,15 @@ async def init_hidden_extension_handler(message: types.Message, state: FSMContex
 
 async def comments_handler(callback_query: types.CallbackQuery, state: FSMContext):
     status = callback_query.data  
-    data["comments"] = status
+    data["comments"] = not data["comments"]
+    kb = get_kb()
+    await callback_query.message.edit_reply_markup(reply_markup = kb)
+    await state.set_state(BotStates.EDITING_POST)
+
+
+async def watermark_handler(callback_query: types.CallbackQuery, state: FSMContext):
+    status = callback_query.data  
+    data["watermark"] = not data["watermark"]
     kb = get_kb()
     await callback_query.message.edit_reply_markup(reply_markup = kb)
     await state.set_state(BotStates.EDITING_POST)
@@ -224,7 +245,7 @@ async def comments_handler(callback_query: types.CallbackQuery, state: FSMContex
 
 async def repost_handler(callback_query: types.Message, state: FSMContext):
     status = callback_query.data  
-    data["reposts"] = status
+    data["reposts"] = not data["reposts"]
     kb = get_kb()
     await callback_query.message.edit_reply_markup(reply_markup = kb)
     await state.set_state(BotStates.EDITING_POST)
@@ -250,7 +271,6 @@ async def url_button_handler(message: types.Message, state: FSMContext):
             for name, link in matches:
                 btn = types.InlineKeyboardButton(text = name, url = link)
                 data["url_buttons"].append(btn)
-
         kb = get_kb()
     except BadRequest:
         await message.answer("Некоректне посилання.Cпробуйте ще раз")
@@ -275,27 +295,6 @@ async def remove_url_button_handler(callback_query: types.CallbackQuery, state: 
     await state.set_state(BotStates.EDITING_POST)
 
 
-def get_calendar(month: int = 0):
-    inline_markup = types.InlineKeyboardMarkup(row_width=7)
-    date = datetime.today()
-
-    if month < 0:
-        date = date.replace(year = date.year + 1) 
-    
-    start = 1 if month else date.day
-    end = calendar.monthrange(date.year, date.month + month)[1]
-    for day in range(start, end + 1):
-        inline_markup.insert(types.InlineKeyboardButton(str(day), callback_data = f"calendar_day:{date.year}-{date.month + month}-{day}"))
-    
-    inline_markup.row(
-        types.InlineKeyboardButton("Назад", callback_data = "prev_month"),
-        types.InlineKeyboardButton(months[date.month + month - 1], callback_data = "current_month"),
-        types.InlineKeyboardButton("Вперед", callback_data = "next_month"),
-    )
-    
-    return inline_markup
-
-
 async def set_calendar_month(callback_query: types.CallbackQuery, state: FSMContext):
     async with state.proxy() as data:
         index = data.get("calendar") if data.get("calendar") else 0
@@ -304,11 +303,11 @@ async def set_calendar_month(callback_query: types.CallbackQuery, state: FSMCont
         await callback_query.message.edit_reply_markup(get_calendar(add))
     
 
-async def choose_date_handler(callback_query: types.CallbackQuery, state: FSMContext):
+async def choose_date_handler(callback_query: types.CallbackQuery):
     date = callback_query.data.split(":")[1]
-    data['date'] = datetime.strptime(date, "%Y-%m-%d").date()
+    data['date'] = datetime.datetime.strptime(date, "%Y-%m-%d").date()
     await callback_query.answer(f"Ви обрали {date}")
-
+    
 
 async def delay_post_handler(message: types.Message, state: FSMContext):
     date_time_regex = r'\d{2}:\d{2}'
@@ -317,77 +316,69 @@ async def delay_post_handler(message: types.Message, state: FSMContext):
     
     if not date:
         return await message.answer("Ви не вибрали дату")
-
+    
     if re.search(date_time_regex, date_string):
-        time = datetime.strptime(date_string, "%H:%M").time()
-        date = datetime.combine(date, time)
-        if date <= datetime.now():
+        time = datetime.datetime.strptime(date_string, "%H:%M").time()
+        date = datetime.datetime.combine(date, time)
+        if date <= datetime.datetime.now():
             return await message.answer(f"Недійсна дата.Спробуйте ще раз")  
         
         data["delay"] = date
         data["delay_str"] = date_string
-        await create_post(message, state)
-        await state.set_state(BotStates.EDITING_POST)
-    else:
-        await message.answer("Невірний формат дати.Спробуйте ще раз")
-
-
-async def send_post(message: types.Message, user_kb: InlineKeyboardMarkup):
-    try:
-        channel = get_channel()
-        media = data.get('media')
-        media_data = None
-        disable_notification = True if data["notify"] == "notify_off" else False
-        if media:
-            if isinstance(media, types.PhotoSize):
-                post = await bot.send_photo(channel, media.file_id, caption = data["text"], parse_mode = data.get("parse_mode"), reply_markup = user_kb, disable_notification = disable_notification)
-            elif isinstance(media, types.Video):
-                post = await bot.send_photo(channel, media.file_id, caption = data["text"], parse_mode = data.get("parse_mode"), reply_markup = user_kb, disable_notification = disable_notification)
-            media = await media.get_url()
-            media_data = await fetch_media_bytes(media)  
-        else:
-            post = await bot.send_message(channel, data["text"], parse_mode = data.get("parse_mode"), reply_markup = user_kb, disable_notification = disable_notification)
-        
-        if data.get("comments") == "comments_off":
-            await asyncio.sleep(5)
-            chat_url = (await bot.get_chat(channel)).linked_chat_id
-            chat = await bot.get_chat(chat_url)
-            await chat.pinned_message.delete()
-        
+        await message.answer(f"Пост буде опубліковано: <b>{date}</b>", parse_mode = "html", reply_markup = make_new_post_kb)
         await Posts.save_post(
-            post.message_id, 
+            message.message_id, 
             bot.id,
-            channel,
+            get_channel(),
             data.get('text'),
-            media_data,
             data.get("hidden_extension_text_1"),
             data.get("hidden_extension_text_2"),
             data.get("hidden_extension_btn"),
             data.get("url_buttons"),
             data.get("parse_mode"),
             data.get('comments'),
-            data.get('notify')
+            data.get('notify'),
+            data.get('delay')
         )
-        return post 
+        data.clear()
+        await state.finish()
+    else:
+        await message.answer("Невірний формат дати.Спробуйте ще раз")
+
+
+async def send_post(user_kb: InlineKeyboardMarkup, channel: str = None, _data: dict = None):
+    global data
+    channel = channel or get_channel()
     
-    except MessageCantBeDeleted:
-        await message.answer("Зробіть мене адміністратором бесіди каналу")
-    except Unauthorized:
-        await message.answer("Щоб вимкнути коментарі - додайте мене у бесіду каналу")
-    except Exception:
-        await message.answer("Під час відправлення у ваш канал поста виникла помилка!Спробуйте ще раз")
-
-
-async def send_post_with_delay(message: types.Message, delay: int, user_kb: InlineKeyboardMarkup):
-    while datetime.now() < delay:
-        await asyncio.sleep(3)
-    post = await send_post(message, user_kb)
-    await message.edit_text(f'<b><a href="{post.url}">Пост</a> успішно опублікований!</b>', parse_mode = 'html')
-
+    data = _data if _data else data
+    media = data.get('media')
+   
+    disable_notification = not data.get("notify")
+    text = data.get('text') or data.get('post_text')
+    
+    if data.get('watermark'):
+        chat = await bot.get_chat(get_channel())
+        text += f'\n\n<a href="{await chat.get_url()}">Підписатися - {chat.full_name}</a>'
+    
+    if media:
+        if isinstance(media, types.PhotoSize):
+            post = await bot.send_photo(channel, media.file_id, caption = text, parse_mode = data.get("parse_mode"), reply_markup = user_kb, disable_notification = disable_notification)
+        elif isinstance(media, types.Video):
+            post = await bot.send_photo(channel, media.file_id, caption = text, parse_mode = data.get("parse_mode"), reply_markup = user_kb, disable_notification = disable_notification) 
+    else:
+        post = await bot.send_message(channel, text, parse_mode = data.get("parse_mode"), reply_markup = user_kb, disable_notification = disable_notification)
+    
+    if data.get("comments"):
+        await asyncio.sleep(5)
+        chat_url = (await bot.get_chat(channel)).linked_chat_id
+        chat = await bot.get_chat(chat_url)
+        await chat.pinned_message.delete()
+    return post 
+    
 
 async def cancle_post(callback_query: types.CallbackQuery, state: FSMContext):
     kb = get_kb()
-    
+
     message = callback_query.message
     media = data.get('media')
     if media:
@@ -401,33 +392,32 @@ async def cancle_post(callback_query: types.CallbackQuery, state: FSMContext):
 
 
 async def create_post(callback_query: types.CallbackQuery, state: FSMContext):
-    user_kb = InlineKeyboardMarkup()
+    user_kb = get_user_kb(data)
     message = callback_query.message
-
-    if data.get("hidden_extension_btn"):
-        user_kb.add(InlineKeyboardButton(data["hidden_extension_btn"], callback_data = "hidden_extension_use"))
-
-    if data.get("url_buttons"):
-        user_kb.add(*data["url_buttons"])
-
-    user_kb = user_kb if user_kb.inline_keyboard else None
-    date = data.get("delay_str")
-    delay = data.get("delay")
-
-    await state.finish()
-    if date and delay:
-        await message.answer(f"Пост буде опубліковано: <b>{date} {data['date']}</b>", parse_mode = "html", reply_markup = make_new_post_kb)
-        asyncio.create_task(send_post_with_delay(message, delay, user_kb))
-    else:
-        post = await send_post(message, user_kb)
-        await message.answer(f'<b><a href="{post.url}">Пост</a> успішно опублікований!</b>', parse_mode = 'html', reply_markup = make_new_post_kb)
+    channel = get_channel()
+    post = await send_post(user_kb)
+    await message.answer(f'<b><a href="{post.url}">Пост</a> успішно опублікований!</b>', parse_mode = 'html', reply_markup = make_new_post_kb)
+    await Posts.save_post(
+        post.message_id,
+        bot.id,
+        channel,
+        data.get('text'),
+        data.get("hidden_extension_text_1"),
+        data.get("hidden_extension_text_2"),
+        data.get("hidden_extension_btn"),
+        data.get("url_buttons"),
+        data.get("parse_mode"),
+        data.get('comments'),
+        data.get('notify'),
+        data.get('delay')
+    )
     data.clear()
+    await state.finish()
 
 
 async def notification_handler(callback_query: types.CallbackQuery, state: FSMContext):
     status = callback_query.data  
-    
-    data["notify"] = status
+    data["notify"] = not data["notify"]
     kb = get_kb()
     await callback_query.message.edit_reply_markup(reply_markup = kb)
     await state.set_state(BotStates.EDITING_POST)
@@ -465,9 +455,13 @@ async def edit_post(message: types.Message, state: FSMContext):
     if data:
         data['is_editing'] = True
         data['text'] = data['post_text']
+        data['media'] = message.photo[-1] if message.photo else message.video
+    
+        url_buttons = data.get('url_buttons') 
+        data['url_buttons'] = [types.InlineKeyboardButton(btn.split('-')[0], btn.split('-')[1]) for btn in url_buttons.split('\n')] if url_buttons else []
+        
         kb = get_kb()
-
-        media = data.get('media')
+        media = data['media']
         if media:
             if isinstance(media, types.PhotoSize):
                 await message.answer_photo(media.file_id, caption = data["text"], parse_mode = data.get("parse_mode"), reply_markup = kb)
@@ -480,51 +474,70 @@ async def edit_post(message: types.Message, state: FSMContext):
         await message.answer('Цей пост не знайдений, спробуйте інший')
 
 async def change_post_data(callback_query: types.CallbackQuery, state: FSMContext):
+    message = callback_query.message
+
     post = await Posts.get('id', data.get('id'))
     channel_id = post['channel_id']
     post_id = post['id']
-    
     media = data.get('media')
-    user_kb = InlineKeyboardMarkup()
-
-    if data.get("hidden_extension_btn"):
-        user_kb.add(InlineKeyboardButton(data["hidden_extension_btn"], callback_data = "hidden_extension_use"))
-
-    if data.get("url_buttons"):
-        user_kb.add(*data["url_buttons"])
-
-    user_kb = user_kb if user_kb.inline_keyboard else None
-    if media:
-        await bot.edit_message_caption(chat_id = channel_id, message_id = post_id, caption = data['text'])
-        post = await bot.edit_message_media(hat_id = channel_id, message_id = post_id, media = media.file_id, reply_markup = user_kb)
-    else:
-        post = await bot.edit_message_text(chat_id = channel_id, message_id = post_id, text = data["text"], reply_markup = user_kb)
-
-    if data.get("comments") == "comments_off":
-        await asyncio.sleep(5)
-        chat_url = (await bot.get_chat(post_id)).linked_chat_id
-        chat = await bot.get_chat(chat_url)
-        await chat.pinned_message.delete()
+    user_kb = get_user_kb(data)
     
-    await Posts.edit_post(
-        post_id,
-        data.get("text"),
-        media,
-        data.get("hidden_extension_text_1"),
-        data.get("hidden_extension_text_2"),
-        data.get("hidden_extension_btn"),
-        data.get("url_buttons"),
-        data.get("parse_mode"),
-        data.get("comments"),
-        data.get("notify")
-    )
-    await callback_query.message.answer(f'<b><a href="{post.url}">Пост</a> успішно відредаговано</b>', parse_mode = "html")
-    await state.finish()
+    text = data['text']
+    if data.get('watermark'):
+        chat = await bot.get_chat(get_channel())
+        text += f'\n\n<a href="{await chat.get_url()}">Підписатися - {chat.full_name}</a>'
+    try:
+        if media:      
+            input_media = None
+            if isinstance(media, types.PhotoSize):
+                input_media = types.InputMediaPhoto(media.file_id, text)
+            elif isinstance(media, types.Video):
+                input_media = types.InputMediaVideo(media.file_id, text)
+            
+            post = await bot.edit_message_media(chat_id = channel_id, message_id = post_id, media = input_media, reply_markup = user_kb)
+        else:
+            post = await bot.edit_message_text(chat_id = channel_id, message_id = post_id, text = text, reply_markup = user_kb)
+
+        if data.get("comments"):
+            await asyncio.sleep(5)
+            chat_url = (await bot.get_chat(post_id)).linked_chat_id
+            chat = await bot.get_chat(chat_url)
+            await chat.pinned_message.delete()
         
+        await Posts.edit_post(
+            post_id,
+            data.get("text"),
+            data.get("hidden_extension_text_1"),
+            data.get("hidden_extension_text_2"),
+            data.get("hidden_extension_btn"),
+            data.get("url_buttons"),
+            data.get("parse_mode"),
+            data.get("comments"),
+            data.get("notify"),
+            data.get("watermark")
+        )
+        await callback_query.message.answer(f'<b><a href="{post.url}">Пост</a> успішно відредаговано</b>', parse_mode = "html")
+        await state.finish()
+
+    except Unauthorized:
+        await message.answer("Щоб вимкнути коментарі - додайте мене у бесіду каналу")
+
+async def post_manager():
+    while True:
+        for post in await Posts.get("bot_id", bot.id, True):
+            post_data = post.data 
+            delay = post_data.get("delay")
+            if delay:  
+                if datetime.datetime.strptime(delay, "%Y-%m-%d %H:%M:%S") <= datetime.datetime.now():
+                    user_kb = get_user_kb(post_data)
+                    msg = await send_post(user_kb, post_data["channel_id"], post_data)
+                    await Posts.update("id", post_data["id"], delay = None, id = msg.message_id)
+        await asyncio.sleep(5)
 
 def register_posting(dp: Dispatcher):
+    asyncio.get_event_loop().create_task(post_manager())
     dp.register_message_handler(choose_post_for_edit, lambda m: m.text == 'Редагувати пост', IsAdminFilter(), state = '*')
-    dp.register_message_handler(edit_post, state = BotStates.CHANGE_POST)
+    dp.register_message_handler(edit_post, state = BotStates.CHANGE_POST, content_types = [types.ContentType.TEXT, types.ContentType.VIDEO, types.ContentType.PHOTO])
     dp.register_callback_query_handler(change_post_data, lambda cb: "change_post_data" in cb.data, state = BotStates.EDITING_POST)
     dp.register_callback_query_handler(edit_post_command, state = BotStates.EDITING_POST)
     dp.register_message_handler(url_button_handler, state = EditStates.URL_BUTTONS)
@@ -537,7 +550,7 @@ def register_posting(dp: Dispatcher):
     dp.register_callback_query_handler(parse_mode_handler, state = EditStates.PARSE_MODE)
     dp.register_message_handler(delay_post_handler, state = EditStates.DATE) 
     dp.register_callback_query_handler(choose_date_handler, lambda cb: "calendar_day" in cb.data, state = EditStates.DATE)
-    dp.register_callback_query_handler(set_calendar_month, lambda cb: cb.data in ["prev_month", "next_month"], state = EditStates.DATE)
+    dp.register_callback_query_handler(set_calendar_month, lambda cb: cb.data in ("prev_month", "next_month"), state = EditStates.DATE)
     dp.register_callback_query_handler(back_to_editing, lambda cb: "back_to_edit" == cb.data, state = "*")
     dp.register_callback_query_handler(cancle_post, lambda cb: "cancle_post" == cb.data, state = EditStates.COMFIRM)
     dp.register_callback_query_handler(create_post, lambda cb: "create_post" == cb.data, state = EditStates.COMFIRM)

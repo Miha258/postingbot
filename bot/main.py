@@ -8,6 +8,7 @@ from request import register_request
 from greet import register_greet
 from posting import register_posting
 from adds import register_adds
+from content_plan import register_content_plan
 from channels import register_channels, IsAdminFilter
 from aiogram.dispatcher import FSMContext
 from paynaments import register_paynaments
@@ -48,6 +49,7 @@ if __name__ == '__main__':
         register_adds(dp)
     elif bot_type == "posting": 
         register_posting(dp)
+        register_content_plan(dp)
   
     register_paynaments(dp)
     register_channels(dp)

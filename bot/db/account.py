@@ -1,6 +1,6 @@
 from .main import DB
 import asyncio
-
+from datetime import datetime
 
 loop = asyncio.get_event_loop()
 posting = loop.run_until_complete(DB("posting.db")())
@@ -73,55 +73,58 @@ class Posts(Table):
         bot_id: int,
         channel_id: str,
         post_text: str,
-        media: bytes | None,
-        hidden_extension_text_1: str | None,
-        hidden_extension_text_2: str | None,
-        hidden_extension_btn: str | None, 
-        url_buttons: list | None,
-        parse_mode: str | None,
-        comments: bool | None,
-        notify: bool | None,
+        hidden_extension_text_1: str = None,
+        hidden_extension_text_2: str = None,
+        hidden_extension_btn: str = None, 
+        url_buttons: list = None,
+        parse_mode: str = None,
+        comments: bool = None,
+        watermark: bool = None,
+        notify: bool = None,
+        delay: datetime = None
     ):
-        url_buttons = "\n".join(url_buttons ) if url_buttons else None
+        url_buttons = "".join([btn.text + " - " + btn.url + "\n" for btn in url_buttons])
         await cls(id, 
             bot_id = bot_id, 
             channel_id = channel_id,
             post_text = post_text,
-            media = media,
             hidden_extension_text_1 = hidden_extension_text_1,
             hidden_extension_text_2 = hidden_extension_text_2,
             hidden_extension_btn = hidden_extension_btn,
             url_buttons = url_buttons,
             parse_mode = parse_mode,
             comments = comments,
-            notify = notify
+            watermark = watermark,
+            notify = notify,
+            delay = delay
         )()
     @classmethod
     async def edit_post(
         cls,
         id: int,
-        post_text: str | None,
-        media: bytes | None,
-        hidden_extension_text_1: str | None,
-        hidden_extension_text_2: str | None,
-        hidden_extension_btn: str | None, 
-        url_buttons: list | None,
-        parse_mode: str | None,
-        comments: bool | None,
-        notify: bool | None,
+        post_text: str = None,
+        hidden_extension_text_1: str = None,
+        hidden_extension_text_2: str = None,
+        hidden_extension_btn: str = None, 
+        url_buttons: list = None,
+        parse_mode: str = None,
+        comments: bool = None,
+        notify: bool = None,
+        watermark: bool = None
     ):
+        url_buttons = "".join([btn.text + " - " + btn.url + "\n" for btn in url_buttons])
         await cls.update(
             "id",
             id,
             post_text = post_text,
-            media = media,
             hidden_extension_text_1 = hidden_extension_text_1,
             hidden_extension_text_2 = hidden_extension_text_2,
             hidden_extension_btn = hidden_extension_btn,
             url_buttons = url_buttons,
             parse_mode = parse_mode,
             comments = comments,
-            notify = notify
+            notify = notify,
+            watermark = watermark
         )
 
 class Greetings(Table):

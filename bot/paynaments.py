@@ -76,5 +76,3 @@ def register_paynaments(dp: Dispatcher):
     dp.register_message_handler(choose_tarif, lambda m: m.text == 'Тарифи')
     dp.register_callback_query_handler(create_invoice, lambda a: "price_" in a.data)
     dp.register_callback_query_handler(check_invoice, lambda a: "check_invoice" in a.data)
- 
-

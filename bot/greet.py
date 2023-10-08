@@ -369,13 +369,11 @@ def register_greet(dp: Dispatcher):
     dp.register_callback_query_handler(add_custom_greet, lambda cb: cb.data == 'add_custom_greet')
     dp.register_message_handler(custom_greet_buttons, state = CustomGreetSatates.MEDIA, content_types = types.ContentTypes.TEXT | types.ContentTypes.PHOTO | types.ContentTypes.VIDEO)
     dp.register_message_handler(procces_custom_greet, state = CustomGreetSatates.BUTTONS)
-    dp
     dp.register_callback_query_handler(edit_custom_greet, lambda cb: "edit_custom_greet" in cb.data)
     dp.register_callback_query_handler(edit_custom_greet_handler, state = CustomGreetSatates.GREET_EDITING)
     dp.register_message_handler(edit_greet_buttons, state = CustomGreetSatates.EDIT_BUTTONS)
     dp.register_callback_query_handler(edit_greet_autodelete, state = CustomGreetSatates.EDIT_AUTODELETE)
     dp.register_callback_query_handler(edit_greet_delay, state = CustomGreetSatates.EDIT_DELAY)
-
     dp.register_callback_query_handler(option_handler, lambda cb: cb.data in options.values())
     dp.register_message_handler(check_season, state = BotStates.BOT_CHECKING)
     dp.register_message_handler(chat_gpt_answer, state = BotStates.CHAT_GPT)

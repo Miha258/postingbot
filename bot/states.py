@@ -18,6 +18,13 @@ class BotAdds(StatesGroup):
     BTN = State()
     CHECK = State()
 
+
+class ContentPlan(StatesGroup):
+    CHOOSE_DAY = State()
+    EDIT_POST = State()
+    DATE = State()
+
+
 class EditStates(StatesGroup):
     EDITING_TEXT = State()
     ATTACHING_MEDIA = State()
