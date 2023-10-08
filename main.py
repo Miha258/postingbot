@@ -8,6 +8,7 @@ from aiogram import executor
 from bot.db.account import Bots, Paynaments, Channels, Users, Posts, Greetings
 import logging
 
+
 logging.basicConfig(level = logging.INFO)
 
 class BotStates(StatesGroup):
@@ -48,7 +49,7 @@ async def newbot_command_handler(message: types.Message, state: FSMContext):
     """, parse_mode = "html", reply_markup = main_kb) 
 
 
-@dp.message_handler(text = "Створити бота", commands = ['/addbot'])
+@dp.message_handler(lambda m: m.text in ('Створити бота', '/addbot'))
 async def get_bots(message: types.Message, state: FSMContext):
     await state.set_state(BotStates.TYPE)
     
@@ -56,7 +57,7 @@ async def get_bots(message: types.Message, state: FSMContext):
     await message.answer(f'<b>Оберіть тип бота:</b>', parse_mode = "html", reply_markup = kb)
     
 
-@dp.message_handler(text = "Мої боти", commands = ['/mybots'], state = "*")
+@dp.message_handler(lambda m: m.text in ('Мої боти', '/mybots'))
 async def get_bots(message: types.Message):
     bots = await Bots.get("user_id", message.from_id, True)
     if not bots:
@@ -152,14 +153,15 @@ async def start_bots(_):
         "bot_id": "INT",
         "channel_id": "TEXT", 
         "post_text": "TEXT",
-        "media": "BLOB",
         "hidden_extension_text_1": "TEXT",
         "hidden_extension_text_2": "TEXT",
         "hidden_extension_btn": "TEXT",
         "url_buttons": "TEXT",
         "parse_mode": "TEXT",
         "comments": "BOOLEAN",
-        "notify": "BOOLEAN"
+        "notify": "BOOLEAN",
+         "watermark": "BOOLEAN",
+        "delay": "DATE"
     })
     
     user_bots = await Bots.all()
