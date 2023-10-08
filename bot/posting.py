@@ -414,7 +414,6 @@ async def create_post(callback_query: types.CallbackQuery, state: FSMContext):
 
 
 async def notification_handler(callback_query: types.CallbackQuery, state: FSMContext):
-    status = callback_query.data  
     data["notify"] = not data["notify"]
     kb = get_kb()
     await callback_query.message.edit_reply_markup(reply_markup = kb)
@@ -448,16 +447,24 @@ async def edit_post(message: types.Message, state: FSMContext):
     global data
     
     target_message = message.forward_from_message_id
-    data = (await Posts.get('id', target_message)).to_dict()
+    post = await Posts.get('id', target_message)
+    if not post:
+        return await message.answer('Пост не знайдено.Спробуйте інший:')
+
+    data = post.to_dict()
 
     if data:
         data['is_editing'] = True
         data['text'] = data['post_text']
         data['media'] = message.photo[-1] if message.photo else message.video
     
-        url_buttons = data.get('url_buttons') 
-        data['url_buttons'] = [types.InlineKeyboardButton(btn.split('-')[0], btn.split('-')[1]) for btn in url_buttons.split('\n')] if url_buttons else []
-        
+        url_buttons = []
+        for btn in data.get('url_buttons').split('\n'):
+            btn = btn.split('-')
+            if btn[0]:
+                url_buttons.append(types.InlineKeyboardButton(btn[0], btn[1].strip()))
+
+        data['url_buttons'] = url_buttons
         kb = get_kb()
         media = data['media']
         if media:
@@ -478,6 +485,9 @@ async def change_post_data(callback_query: types.CallbackQuery, state: FSMContex
     channel_id = post['channel_id']
     post_id = post['id']
     media = data.get('media')
+    print(data.get("hidden_extension_text_1"),
+            data.get("hidden_extension_text_2"),
+            data.get("hidden_extension_btn"))
     user_kb = get_user_kb(data)
     
     text = data['text']

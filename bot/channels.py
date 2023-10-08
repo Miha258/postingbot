@@ -87,12 +87,12 @@ async def update_channel_handler(message: types.Message, state: FSMContext):
                 else:
                     await Channels(message.message_id, chat_id = chat.id, bot_id = bot.id, name = chat.full_name, subscribers = await chat.get_members_count())()
                     await message.answer("Канал успішно доданий!")
-                    set_channel(chat.id)
+                    set_channel(str(chat.id))
                     await state.finish()
             else:
                 await Channels(message.message_id, chat_id = chat.id, bot_id = bot.id, name = chat.full_name, subscribers = await chat.get_members_count())()
                 await message.answer("Канал успішно доданий!")
-                set_channel(chat.id)
+                set_channel(str(chat.id))
                 await state.finish()
     except Unauthorized:
         await message.answer("Схоже я не є учасником цього каналу.Спробуйте інший:")

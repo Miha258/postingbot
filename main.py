@@ -160,7 +160,7 @@ async def start_bots(_):
         "parse_mode": "TEXT",
         "comments": "BOOLEAN",
         "notify": "BOOLEAN",
-         "watermark": "BOOLEAN",
+        "watermark": "BOOLEAN",
         "delay": "DATE"
     })
     
