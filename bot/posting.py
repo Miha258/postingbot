@@ -452,7 +452,7 @@ async def edit_post(message: types.Message, state: FSMContext):
         return await message.answer('Пост не знайдено.Спробуйте інший:')
 
     data = post.to_dict()
-
+    
     if data:
         data['is_editing'] = True
         data['text'] = data['post_text']
@@ -492,7 +492,7 @@ async def change_post_data(callback_query: types.CallbackQuery, state: FSMContex
     
     text = data['text']
     if data.get('watermark'):
-        chat = await bot.get_chat(get_channel())
+        chat = await bot.get_chat(post['channel_id'])
         text += f'\n\n<a href="{await chat.get_url()}">Підписатися - {chat.full_name}</a>'
     try:
         if media:      
