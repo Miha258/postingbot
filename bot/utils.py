@@ -22,17 +22,6 @@ async def fetch_media_bytes(url):
             return image_bytes 
         
 
-def is_photo(file):
-    file_name = file.get_file_name()
-    image_extensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp']
-    return any(file_name.lower().endswith(ext) for ext in image_extensions)
-
-def is_video(file):
-    file_name = file.get_file_name()
-    video_extensions = ['.mp4', '.avi', '.mov', '.mkv', '.wmv']
-    return any(file_name.lower().endswith(ext) for ext in video_extensions)
-
-
 class IsAdminFilter(BoundFilter):
     async def check(self, message: Message) -> bool:
         return message.from_user.id == int(owner)
