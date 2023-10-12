@@ -81,7 +81,8 @@ class Posts(Table):
         comments: bool = None,
         watermark: bool = None,
         notify: bool = None,
-        delay: datetime = None
+        delay: datetime = None,
+        media: str = None
     ):
         url_buttons = "".join([btn.text + " - " + btn.url + "\n" for btn in url_buttons])
         await cls(id, 
@@ -96,7 +97,8 @@ class Posts(Table):
             comments = comments,
             watermark = watermark,
             notify = notify,
-            delay = delay
+            delay = delay,
+            media = media
         )()
     @classmethod
     async def edit_post(
@@ -110,7 +112,8 @@ class Posts(Table):
         parse_mode: str = None,
         comments: bool = None,
         notify: bool = None,
-        watermark: bool = None
+        watermark: bool = None,
+        media: str = None
     ):
         url_buttons = "".join([btn.text + " - " + btn.url + "\n" for btn in url_buttons])
         await cls.update(
@@ -124,7 +127,8 @@ class Posts(Table):
             parse_mode = parse_mode,
             comments = comments,
             notify = notify,
-            watermark = watermark
+            watermark = watermark,
+            media = media
         )
 
 class Greetings(Table):

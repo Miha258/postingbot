@@ -322,6 +322,8 @@ async def delay_post_handler(message: types.Message, state: FSMContext):
         
         data["delay"] = date
         data["delay_str"] = date_string
+        print(data)
+        media = data.get('media')
         await message.answer(f"Пост буде опубліковано: <b>{date}</b>", parse_mode = "html", reply_markup = make_new_post_kb)
         await Posts.save_post(
             message.message_id, 
@@ -336,7 +338,8 @@ async def delay_post_handler(message: types.Message, state: FSMContext):
             data.get('comments'),
             data.get('watermark'),
             data.get('notify'),
-            data.get('delay')
+            data.get('delay'),
+            await media.get_url() if media else None
         )
         data.clear()
         await state.finish()
@@ -344,13 +347,12 @@ async def delay_post_handler(message: types.Message, state: FSMContext):
         await message.answer("Невірний формат дати.Спробуйте ще раз")
 
 
-async def send_post(user_kb: InlineKeyboardMarkup, channel: str = None, _data: dict = None):
+async def send_post(user_kb: InlineKeyboardMarkup, channel: str = None, _data: dict = None) -> types.Message:
     global data
     channel = channel or get_channel()
     
     data = _data if _data else data
     media = data.get('media')
-   
     disable_notification = not data.get("notify")
     text = data.get('text') or data.get('post_text')
     
@@ -362,7 +364,14 @@ async def send_post(user_kb: InlineKeyboardMarkup, channel: str = None, _data: d
         if isinstance(media, types.PhotoSize):
             post = await bot.send_photo(channel, media.file_id, caption = text, parse_mode = data.get("parse_mode"), reply_markup = user_kb, disable_notification = disable_notification)
         elif isinstance(media, types.Video):
-            post = await bot.send_photo(channel, media.file_id, caption = text, parse_mode = data.get("parse_mode"), reply_markup = user_kb, disable_notification = disable_notification) 
+            post = await bot.send_video(channel, media.file_id, caption = text, parse_mode = data.get("parse_mode"), reply_markup = user_kb, disable_notification = disable_notification) 
+        elif isinstance(media, str):
+            file = await fetch_media_bytes(media)
+            is_video = types.InputMediaVideo(file).duration
+            if is_video:
+                post = await bot.send_video(channel, file, caption = text, parse_mode = data.get("parse_mode"), reply_markup = user_kb, disable_notification = disable_notification) 
+            elif not is_video:
+                post = await bot.send_photo(channel, file, caption = text, parse_mode = data.get("parse_mode"), reply_markup = user_kb, disable_notification = disable_notification)
     else:
         post = await bot.send_message(channel, text, parse_mode = data.get("parse_mode"), reply_markup = user_kb, disable_notification = disable_notification)
     
@@ -394,6 +403,8 @@ async def create_post(callback_query: types.CallbackQuery, state: FSMContext):
     message = callback_query.message
     channel = get_channel()
     post = await send_post(user_kb)
+    media = data.get('media')
+    print(data)
     await message.answer(f'<b><a href="{post.url}">Пост</a> успішно опублікований!</b>', parse_mode = 'html', reply_markup = make_new_post_kb)
     await Posts.save_post(
         post.message_id,
@@ -407,7 +418,9 @@ async def create_post(callback_query: types.CallbackQuery, state: FSMContext):
         data.get("parse_mode"),
         data.get('comments'),
         data.get('notify'),
-        data.get('delay')
+        data.get('watermark'),
+        data.get('delay'),
+        await media.get_url() if media else None
     )
     data.clear()
     await state.finish()
@@ -440,7 +453,7 @@ async def create_post_again(callback_query: types.CallbackQuery, state: FSMConte
 
 async def choose_post_for_edit(message: types.Message, state: FSMContext):
     await state.set_state(BotStates.CHANGE_POST)
-    await message.answer('Перешліть мені пост, який бажаєте відредагувати:')
+    await message.answer('Перешліть мені пост, який бажаєте відредагувати:', reply_markup = back_to_menu())
 
 
 async def edit_post(message: types.Message, state: FSMContext):
@@ -485,9 +498,6 @@ async def change_post_data(callback_query: types.CallbackQuery, state: FSMContex
     channel_id = post['channel_id']
     post_id = post['id']
     media = data.get('media')
-    print(data.get("hidden_extension_text_1"),
-            data.get("hidden_extension_text_2"),
-            data.get("hidden_extension_btn"))
     user_kb = get_user_kb(data)
     
     text = data['text']
@@ -495,12 +505,13 @@ async def change_post_data(callback_query: types.CallbackQuery, state: FSMContex
         chat = await bot.get_chat(post['channel_id'])
         text += f'\n\n<a href="{await chat.get_url()}">Підписатися - {chat.full_name}</a>'
     try:
-        if media:      
+        if media:
+            media_file_id = media.file_id
             input_media = None
             if isinstance(media, types.PhotoSize):
-                input_media = types.InputMediaPhoto(media.file_id, text)
+                input_media = types.InputMediaPhoto(media_file_id, text)
             elif isinstance(media, types.Video):
-                input_media = types.InputMediaVideo(media.file_id, text)
+                input_media = types.InputMediaVideo(media_file_id, text)
             
             post = await bot.edit_message_media(chat_id = channel_id, message_id = post_id, media = input_media, reply_markup = user_kb)
         else:
@@ -522,7 +533,8 @@ async def change_post_data(callback_query: types.CallbackQuery, state: FSMContex
             data.get("parse_mode"),
             data.get("comments"),
             data.get("notify"),
-            data.get("watermark")
+            data.get("watermark"),
+            await media.get_url() if media else None
         )
         await callback_query.message.answer(f'<b><a href="{post.url}">Пост</a> успішно відредаговано</b>', parse_mode = "html")
         await state.finish()
@@ -532,15 +544,20 @@ async def change_post_data(callback_query: types.CallbackQuery, state: FSMContex
 
 async def post_manager():
     while True:
-        for post in await Posts.get("bot_id", bot.id, True):
-            post_data = post.data 
-            delay = post_data.get("delay")
-            if delay:  
-                if datetime.datetime.strptime(delay, "%Y-%m-%d %H:%M:%S") <= datetime.datetime.now():
-                    user_kb = get_user_kb(post_data)
-                    msg = await send_post(user_kb, post_data["channel_id"], post_data)
-                    await Posts.update("id", post_data["id"], delay = None, id = msg.message_id)
-        await asyncio.sleep(5)
+        posts = await Posts.get("bot_id", bot.id, True)
+        if posts:
+            for post in posts:
+                try:
+                    post_data = post.data 
+                    delay = post_data.get("delay")
+                    if delay:  
+                        if datetime.datetime.strptime(delay, "%Y-%m-%d %H:%M:%S") <= datetime.datetime.now():
+                            user_kb = get_user_kb(post_data)
+                            msg = await send_post(user_kb, post_data["channel_id"], post_data)
+                            await Posts.update("id", post_data["id"], delay = None, id = msg.message_id)
+                except Exception as e:
+                    print(e)
+            await asyncio.sleep(5)
 
 def register_posting(dp: Dispatcher):
     asyncio.get_event_loop().create_task(post_manager())

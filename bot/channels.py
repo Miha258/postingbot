@@ -68,7 +68,7 @@ async def choose_channel_handler(callback_query: types.CallbackQuery, state: FSM
             await content_plan_list(message, state)
 
 async def update_channel(callback_query: types.CallbackQuery, state: FSMContext):
-    await callback_query.answer("Перешліть мені повідомлення з каналу:")
+    await callback_query.answer("Перешліть мені повідомлення з каналу:", show_alert = True)
     await state.set_state(BotStates.SET_CHANNEL)
    
 

@@ -161,7 +161,8 @@ async def start_bots(_):
         "comments": "BOOLEAN",
         "notify": "BOOLEAN",
         "watermark": "BOOLEAN",
-        "delay": "DATE"
+        "delay": "DATE",
+        "media": "TEXT"
     })
     
     user_bots = await Bots.all()
