@@ -186,7 +186,7 @@ async def send_custom_greet_to_user(request: types.ChatJoinRequest):
             buttons: str = greet['buttons']
             image: bytes = greet['image']
             
-            await asyncio.sleep(delay)
+            await asyncio.sleep(delay * 1000)
             
             kb = InlineKeyboardMarkup(inline_keyboard = [[]])
             for button in buttons.split('\n'):
@@ -200,7 +200,7 @@ async def send_custom_greet_to_user(request: types.ChatJoinRequest):
                 msg = await bot.send_message(request.from_user.id, greet_text, reply_markup = kb, parse_mode = 'html')
             
             if autodelete:  
-                await asyncio.sleep(autodelete)
+                await asyncio.sleep(autodelete * 1000)
                 await msg.delete()
 
 
