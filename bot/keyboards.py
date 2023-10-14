@@ -58,8 +58,14 @@ def get_user_kb(data: dict):
     if data.get("hidden_extension_btn"):
         user_kb.add(InlineKeyboardButton(data["hidden_extension_btn"], callback_data = "hidden_extension_use"))
 
-    if data.get("url_buttons"):
-        user_kb.add(*data["url_buttons"])
+    url_buttons = data.get("url_buttons")
+    if url_buttons:
+        if isinstance(url_buttons, list):
+            user_kb.add(*data["url_buttons"])
+        elif isinstance(url_buttons, str):
+            buttons = [InlineKeyboardButton(btn.split(' - ')[0], btn.split(' - ')[1]) for btn in url_buttons.split('\n') if btn]
+            print(buttons)
+            user_kb.add(*buttons)
 
     user_kb = user_kb if user_kb.inline_keyboard else None
     return user_kb

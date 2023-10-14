@@ -357,7 +357,7 @@ async def send_post(user_kb: InlineKeyboardMarkup, channel: str = None, _data: d
     text = data.get('text') or data.get('post_text')
     
     if data.get('watermark'):
-        chat = await bot.get_chat(get_channel())
+        chat = await bot.get_chat(channel)
         text += f'\n\n<a href="{await chat.get_url()}">Підписатися - {chat.full_name}</a>'
     
     if media:
@@ -547,7 +547,7 @@ async def post_manager():
         posts = await Posts.get("bot_id", bot.id, True)
         if posts:
             for post in posts:
-                try:
+                # try:
                     post_data = post.data 
                     delay = post_data.get("delay")
                     if delay:  
@@ -555,8 +555,8 @@ async def post_manager():
                             user_kb = get_user_kb(post_data)
                             msg = await send_post(user_kb, post_data["channel_id"], post_data)
                             await Posts.update("id", post_data["id"], delay = None, id = msg.message_id)
-                except Exception as e:
-                    print(e)
+                # except Exception as e:
+                #     print(e)
             await asyncio.sleep(5)
 
 def register_posting(dp: Dispatcher):
