@@ -185,14 +185,14 @@ async def send_custom_greet_to_user(request: types.ChatJoinRequest):
             greet_text: int = greet['greet_text']
             buttons: str = greet['buttons']
             image: bytes = greet['image']
-            
             await asyncio.sleep(delay * 60)
             
-            kb = InlineKeyboardMarkup(inline_keyboard = [[]])
-            for button in buttons.split('\n'):
-                if button:
-                    name, url =  button.split('-')
-                    kb.add(InlineKeyboardButton(name, url))
+            kb = InlineKeyboardMarkup()
+            if buttons:
+                for button in buttons.split('\n'):
+                    if button:
+                        name, url =  button.split('-')
+                        kb.add(InlineKeyboardButton(name, url))
             
             if image:
                 msg = await bot.send_photo(request.from_user.id, image, greet_text, reply_markup = kb, parse_mode = 'html') 

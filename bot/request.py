@@ -137,8 +137,8 @@ async def set_timeout(message: types.Message, state: FSMContext):
             time = datetime(current_datetime.year, current_datetime.month, current_datetime.day, hour=int(date_string[:2]), minute=int(date_string[3:5]))
             channels[channel]["delay"] = time
             await message.answer(f"Ви успішно відклали прийом заявок на <b>{time.strftime('%Y-%m-%d %H:%M')}</b>", parse_mode = "html")
-            await asyncio.create_task(check_timeout(message, time, channel))
             await state.finish()
+            await asyncio.create_task(check_timeout(message, time, channel))
         else:
             await message.answer("Невірне значення.Спробуйте ще раз:")
     except:
@@ -149,6 +149,7 @@ async def join_request_handler(request: types.ChatJoinRequest):
     await greeting_request_handler(request)
     channel_id = str(request.chat.id)
     channel = channels.get(channel_id)
+    channels[channel_id]["requests"].append(request)
     if channel:
         request_type = channel["type"]
         match request_type:
@@ -158,11 +159,6 @@ async def join_request_handler(request: types.ChatJoinRequest):
                 await auto_request(request)
             case "disable":
                 await disable_request(request)
-            case "amount":
-                channel["requests"].append(request)
-            case "timeout_req":
-                channel["requests"].append(request)
-
     
 def register_request(dp: Dispatcher):
     dp.register_callback_query_handler(option_handler, lambda query: query.data in options.values())
