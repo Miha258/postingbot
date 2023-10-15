@@ -7,7 +7,7 @@ from aiogram.dispatcher import FSMContext
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.utils.callback_data import CallbackData
 from posting import process_new_post
-from aiogram.utils.exceptions import Unauthorized
+from aiogram.utils.exceptions import Unauthorized, BotKicked, BotBlocked
 from request import mode_selector
 from utils import IsAdminFilter
 from keyboards import *
@@ -46,15 +46,20 @@ async def choose_channel_handler(callback_query: types.CallbackQuery, state: FSM
     _bot = await Bots.get("id", bot.id)
 
     if _bot:
-        chat = await bot.get_chat(channel_id)
-        subs_count = await chat.get_member_count()
-        if subs_count > 1000 and _bot["subscription"] != 1:
-            return await message.answer("Схоже у вас в каналі більше 1000 підписників.Офрміть <b>тариф</b> для використання бота", parse_mode = "html")
-        
-        if _bot["subscription"]:    
-            if datetime.now() > datetime.strptime(_bot["subscription_to"], "%Y-%m-%d %H:%M:%S.%f"):
-                await Bots.update("id", bot.id, subscription = False)
-                return await message.answer("У вас закінчився тариф.Офрміть <b>тариф</b> для використання бота", parse_mode = "html")
+        try:
+            chat = await bot.get_chat(channel_id)
+            subs_count = await chat.get_member_count()
+            if subs_count > 1000 and _bot["subscription"] != 1:
+                return await message.answer("Схоже у вас в каналі більше 1000 підписників.Офрміть <b>тариф</b> для використання бота", parse_mode = "html")
+            
+            if _bot["subscription"]:    
+                if datetime.now() > datetime.strptime(_bot["subscription_to"], "%Y-%m-%d %H:%M:%S.%f"):
+                    await Bots.update("id", bot.id, subscription = False)
+                    return await message.answer("У вас закінчився тариф.Офрміть <b>тариф</b> для використання бота", parse_mode = "html")
+        except BotKicked:
+            return await message.answer("Схоже я був видалений з цього каналу.Додайте мене і спробуйте ще раз")
+        except BotBlocked:
+            return await message.answer("Схоже я був забанений у каналі.Розблокуйте мене і спробуйте ще раз")
     
     set_channel(channel_id)
     match operation_type:
