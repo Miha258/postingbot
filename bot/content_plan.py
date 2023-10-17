@@ -8,6 +8,7 @@ from datetime import timedelta
 from states import ContentPlan
 from keyboards import *
 from re import search
+from utils import fetch_media_bytes
 
 async def get_plan_kb(date: datetime.datetime, full = False):
     posts = await Posts.get('channel_id', get_channel(), True)
@@ -121,8 +122,19 @@ async def set_calendar_state(callback_query: types.CallbackQuery, state: FSMCont
 async def edit_planed_post(callback_query: types.CallbackQuery):
     post_id = int(callback_query.data.split('_')[-1])
     post = await Posts.get('id', post_id)
-    await callback_query.message.edit_text(post['post_text'], reply_markup = get_edit_planed_post_kb(post_id))
-
+    message = callback_query.message
+    
+    media = post['media']
+    if media:
+        file = await fetch_media_bytes(media)
+        is_video = types.InputMediaVideo(file).duration
+        if is_video:
+            post = await message.answer_video(file, caption = post['post_text'], parse_mode = post["parse_mode"]) 
+        elif not is_video:
+            post = await message.answer_photo(file, caption = post['post_text'], parse_mode = post["parse_mode"])
+    else:
+        await callback_query.answer(post['post_text'], reply_markup = get_edit_planed_post_kb(post_id))
+    await message.delete()
 
 async def handle_planed_post_editing(callback_query: types.CallbackQuery, state: FSMContext):
     data = callback_query.data

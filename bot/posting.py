@@ -1,6 +1,6 @@
 from create_bot import bot, get_channel
 import asyncio
-from aiogram.utils.exceptions import Unauthorized, MessageNotModified
+from aiogram.utils.exceptions import Unauthorized, FileIsTooBig
 from aiogram.utils.callback_data import CallbackData
 from aiogram import types, Dispatcher
 from aiogram.dispatcher import FSMContext
@@ -324,25 +324,29 @@ async def delay_post_handler(message: types.Message, state: FSMContext):
         data["delay_str"] = date_string
         print(data)
         media = data.get('media')
-        await message.answer(f"Пост буде опубліковано: <b>{date}</b>", parse_mode = "html", reply_markup = make_new_post_kb)
-        await Posts.save_post(
-            message.message_id, 
-            bot.id,
-            get_channel(),
-            data.get('text'),
-            data.get("hidden_extension_text_1"),
-            data.get("hidden_extension_text_2"),
-            data.get("hidden_extension_btn"),
-            data.get("url_buttons"),
-            data.get("parse_mode"),
-            data.get('comments'),
-            data.get('watermark'),
-            data.get('notify'),
-            data.get('delay'),
-            await media.get_url() if media else None
-        )
-        data.clear()
-        await state.finish()
+
+        try:
+            await Posts.save_post(
+                message.message_id, 
+                bot.id,
+                get_channel(),
+                data.get('text'),
+                data.get("hidden_extension_text_1"),
+                data.get("hidden_extension_text_2"),
+                data.get("hidden_extension_btn"),
+                data.get("url_buttons"),
+                data.get("parse_mode"),
+                data.get('comments'),
+                data.get('watermark'),
+                data.get('notify'),
+                data.get('delay'),
+                await media.get_url() if media else None
+            )
+            data.clear()
+            await message.answer(f"Пост буде опубліковано: <b>{date}</b>", parse_mode = "html", reply_markup = make_new_post_kb)
+            await state.finish()
+        except FileIsTooBig:
+            await message.answer("Файл завеликий, спробуйте ще раз:")
     else:
         await message.answer("Невірний формат дати.Спробуйте ще раз")
 
