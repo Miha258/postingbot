@@ -40,6 +40,9 @@ def get_kb():
     ])
     kb.add(back_btn)
 
+    if data.get('datetime'):
+        remove_button_by_callback_data('create_post', kb)
+
     if not data.get('is_editing'):
         kb.inline_keyboard.insert(len(kb.inline_keyboard) - 1,[
             InlineKeyboardButton(
@@ -54,7 +57,7 @@ def get_kb():
     if data.get('is_editing') and data.get('media'):
         remove_button_by_callback_data("disattach_media", kb)
         kb.inline_keyboard.insert(0, [InlineKeyboardButton("Замінити медіа", callback_data = "attach_media")])
-
+    
     url_buttons = data.get("url_buttons")
     if url_buttons:
         for i, btn in enumerate(url_buttons):
@@ -67,11 +70,11 @@ def get_kb():
         kb.inline_keyboard.insert(len(url_buttons), [
             InlineKeyboardButton("Видалити приховане продовження", callback_data = "hidden_extension_remove")
         ]) 
-        kb.inline_keyboard.insert(0, [
+        kb.inline_keyboard.insert(len(url_buttons), [
             InlineKeyboardButton(data["hidden_extension_btn"], callback_data = "hidden_extension_use")
         ]) 
     else:
-        kb.inline_keyboard.insert(1, [
+        kb.inline_keyboard.insert(len(url_buttons),  [
              InlineKeyboardButton("Приховане продовження", callback_data = "hidden_extension")
         ]) 
     
@@ -87,6 +90,7 @@ async def process_new_post(message: types.Message, state: FSMContext):
     data["notify"] = False
     data["parse_mode"] = "html"
     data["media"] = None
+    data["datetime"] = (await state.get_data()).get('datetime')
     await message.answer("Надішліть текст, картику або відео поста")
     await state.set_state(EditStates.EDITING_TEXT)
     
@@ -122,9 +126,13 @@ async def edit_post_command(callback_query: types.CallbackQuery, state: FSMConte
             await remove_url_button_handler(callback_query, state) 
         case "notify_on" | "notify_off":
             await notification_handler(callback_query, state) 
-        case "delay_post":      
-            await message.answer("Введіть час у форматі і виберіть дату: <b>00:00</b>", parse_mode = "html", reply_markup = get_calendar().add(back_to_edit.inline_keyboard[0][0]))    
-            await state.set_state(EditStates.DATE)     
+        case "delay_post": 
+            await state.set_state(EditStates.DATE)    
+            date_time = data.get("datetime")
+            if date_time:
+                await delay_post_handler(message, state)
+            else:
+                await message.answer("Введіть час у форматі і виберіть дату: <b>00:00</b>", parse_mode = "html", reply_markup = get_calendar().add(back_to_edit.inline_keyboard[0][0]))     
         case "create_post":
             await state.set_state(EditStates.COMFIRM)
             await message.answer('Підтвердіть публікацію:', reply_markup = confirm_post_kb)  
@@ -189,7 +197,7 @@ async def open_modal(callback_query: types.CallbackQuery):
 
 async def remove_hidden_extension(callback_query: types.CallbackQuery, state: FSMContext):
     remove_button_by_callback_data("hidden_extension_use", get_kb())    
-    
+
     del data["hidden_extension_btn"]
     del data["hidden_extension_text_1"]
     del data["hidden_extension_text_2"]
@@ -268,12 +276,8 @@ async def url_button_handler(message: types.Message, state: FSMContext):
             for name, link in matches:
                 btn = types.InlineKeyboardButton(text = name, url = link)
                 data["url_buttons"].append(btn)
+
         kb = get_kb()
-    except BadRequest:
-        await message.answer("Некоректне посилання.Cпробуйте ще раз")
-    except IndexError:
-        await message.answer("Некоректний формат.Cпробуйте ще раз")
-    else:         
         media = data.get('media')
         if media:
             if isinstance(media, types.PhotoSize):
@@ -283,6 +287,10 @@ async def url_button_handler(message: types.Message, state: FSMContext):
         else:
             await message.answer(data["text"], parse_mode = data.get("parse_mode"), reply_markup = kb)
         await state.set_state(BotStates.EDITING_POST)
+    except BadRequest:
+        await message.answer("Некоректне посилання.Cпробуйте ще раз")
+    except IndexError:
+        await message.answer("Некоректний формат.Cпробуйте ще раз")
 
 
 async def remove_url_button_handler(callback_query: types.CallbackQuery, state: FSMContext):
@@ -307,48 +315,49 @@ async def choose_date_handler(callback_query: types.CallbackQuery):
     
 
 async def delay_post_handler(message: types.Message, state: FSMContext):
-    date_time_regex = r'\d{2}:\d{2}'
-    date_string = message.text
-    date = data.get("date")
-    
-    if not date:
-        return await message.answer("Ви не вибрали дату")
-    
-    if re.search(date_time_regex, date_string):
-        time = datetime.datetime.strptime(date_string, "%H:%M").time()
-        date = datetime.datetime.combine(date, time)
-        if date <= datetime.datetime.now():
-            return await message.answer(f"Недійсна дата.Спробуйте ще раз")  
+    date_time = data.get("datetime")
+    if not date_time:
+        date_time_regex = r'\d{2}:\d{2}'
+        date_string = message.text
+        date = data.get("date")
         
-        data["delay"] = date
-        data["delay_str"] = date_string
-        print(data)
+        if not date:
+            return await message.answer("Ви не вибрали дату")
+        
+        if re.search(date_time_regex, date_string):
+            time = datetime.datetime.strptime(date_string, "%H:%M").time()
+            date = datetime.datetime.combine(date, time)
+            if date <= datetime.datetime.now():
+                return await message.answer(f"Недійсна дата.Спробуйте ще раз")  
+            
+            data["delay"] = date
+            data["delay_str"] = date_string
+        else:                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  
+            await message.answer("Невірний формат дати.Спробуйте ще раз")
+    try:
         media = data.get('media')
-
-        try:
-            await Posts.save_post(
-                message.message_id, 
-                bot.id,
-                get_channel(),
-                data.get('text'),
-                data.get("hidden_extension_text_1"),
-                data.get("hidden_extension_text_2"),
-                data.get("hidden_extension_btn"),
-                data.get("url_buttons"),
-                data.get("parse_mode"),
-                data.get('comments'),
-                data.get('watermark'),
-                data.get('notify'),
-                data.get('delay'),
-                await media.get_url() if media else None
-            )
-            data.clear()
-            await message.answer(f"Пост буде опубліковано: <b>{date}</b>", parse_mode = "html", reply_markup = make_new_post_kb)
-            await state.finish()
-        except FileIsTooBig:
-            await message.answer("Файл завеликий, спробуйте ще раз:")
-    else:
-        await message.answer("Невірний формат дати.Спробуйте ще раз")
+        date = date_time or data.get('delay')
+        await Posts.save_post(
+            message.message_id, 
+            bot.id,
+            get_channel(),
+            data.get('text'),
+            data.get("hidden_extension_text_1"),
+            data.get("hidden_extension_text_2"),
+            data.get("hidden_extension_btn"),
+            data.get("url_buttons"),
+            data.get("parse_mode"),
+            data.get('comments'),
+            data.get('watermark'),
+            data.get('notify'),
+            date,
+            await media.get_url() if media else None
+        )
+        data.clear()
+        await message.answer(f"Пост буде опубліковано: <b>{date}</b>", parse_mode = "html", reply_markup = make_new_post_kb)
+        await state.finish()
+    except FileIsTooBig:
+        await message.answer("Файл завеликий, спробуйте ще раз:")
 
 
 async def send_post(user_kb: InlineKeyboardMarkup, channel: str = None, _data: dict = None) -> types.Message:
@@ -408,7 +417,6 @@ async def create_post(callback_query: types.CallbackQuery, state: FSMContext):
     channel = get_channel()
     post = await send_post(user_kb)
     media = data.get('media')
-    print(data)
     await message.answer(f'<b><a href="{post.url}">Пост</a> успішно опублікований!</b>', parse_mode = 'html', reply_markup = make_new_post_kb)
     await Posts.save_post(
         post.message_id,
@@ -513,13 +521,13 @@ async def change_post_data(callback_query: types.CallbackQuery, state: FSMContex
             media_file_id = media.file_id
             input_media = None
             if isinstance(media, types.PhotoSize):
-                input_media = types.InputMediaPhoto(media_file_id, text)
+                input_media = types.InputMediaPhoto(media_file_id, text, parse_mode = data.get('parse_mode'))
             elif isinstance(media, types.Video):
-                input_media = types.InputMediaVideo(media_file_id, text)
+                input_media = types.InputMediaVideo(media_file_id, text, parse_mode = data.get('parse_mode'))
             
             post = await bot.edit_message_media(chat_id = channel_id, message_id = post_id, media = input_media, reply_markup = user_kb)
         else:
-            post = await bot.edit_message_text(chat_id = channel_id, message_id = post_id, text = text, reply_markup = user_kb)
+            post = await bot.edit_message_text(chat_id = channel_id, message_id = post_id, text = text, reply_markup = user_kb, parse_mode = data.get('parse_mode'))
 
         if data.get("comments"):
             await asyncio.sleep(5)

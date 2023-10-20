@@ -63,9 +63,10 @@ def get_user_kb(data: dict):
         if isinstance(url_buttons, list):
             user_kb.add(*data["url_buttons"])
         elif isinstance(url_buttons, str):
-            buttons = [InlineKeyboardButton(btn.split(' - ')[0], btn.split(' - ')[1]) for btn in url_buttons.split('\n') if btn]
-            print(buttons)
-            user_kb.add(*buttons)
+            for i, btn in enumerate(url_buttons.split('\n')):
+                if btn:
+                    name, url = btn.split(' - ')
+                    user_kb.inline_keyboard.insert(i + 1, [InlineKeyboardButton(name, url)])
 
     user_kb = user_kb if user_kb.inline_keyboard else None
     return user_kb

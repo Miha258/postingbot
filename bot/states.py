@@ -21,6 +21,7 @@ class BotAdds(StatesGroup):
 
 class ContentPlan(StatesGroup):
     CHOOSE_DAY = State()
+    CHOOSE_DATE = State()
     EDIT_POST = State()
     DATE = State()
 

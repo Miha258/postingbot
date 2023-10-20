@@ -19,11 +19,14 @@ class DB:
     async def create_table(self, name: str, schema: dict):
         column_definitions = ', '.join([f'{column} {data_type}' for column, data_type in schema.items()])
         query = f"CREATE TABLE IF NOT EXISTS {name} ({column_definitions})"
+        print(query)
         await self.cursor.execute(query)
         
 
     async def drop_table(self, table: str):
-        await self.cursor.execute(f"DROP TABLE IF EXISTS {table}")
+        query = f"DROP TABLE IF EXISTS {table}"
+        print(query)
+        await self.cursor.execute(query)
 
     async def create_record(self, table: str, data: dict):
         columns = ', '.join(data.keys())
@@ -31,6 +34,7 @@ class DB:
 
         if not await self.read_record(table, "id", data["id"], True):
             query = f"INSERT INTO {table} ({columns}) VALUES ({placeholders})"
+            print(query)
             await self.cursor.execute(query, list(data.values()))
         else:
             raise DocumentAlreadyExists
@@ -40,18 +44,25 @@ class DB:
         await self.cursor.execute(query, (value,))
         records = await self.cursor.fetchall()
 
+        if not self.cursor.description:
+            return
+
         column_names = [column[0] for column in self.cursor.description]
         records_dicts = [dict(zip(column_names, record)) for record in records]
-
-        return records_dicts if all else records_dicts [0] if records_dicts else None
+        print(query)
+        return records_dicts if all else records_dicts[0] if records_dicts else None
        
     async def get_all_records(self, table: str):
         query = f"SELECT * FROM {table}"
         await self.cursor.execute(query)
         records = await self.cursor.fetchall()
+
+        if not self.cursor.description:
+            return
+        
+        print(query)
         column_names = [column[0] for column in self.cursor.description]
         records_dicts = [dict(zip(column_names, record)) for record in records]
-
         return records_dicts
 
 
@@ -67,7 +78,7 @@ class DB:
     async def delete_record(self, table: str, record_id: int):
         if await self.read_record(table, "id", record_id, True):
             query = f"DELETE FROM {table} WHERE id = ?"
-    
+            print(query)
             await self.cursor.execute(query, (record_id,))
         else:
             raise DocumentNotFound
