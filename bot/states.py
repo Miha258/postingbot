@@ -28,6 +28,8 @@ class ContentPlan(StatesGroup):
 
 class EditStates(StatesGroup):
     EDITING_TEXT = State()
+    AUTODELETE = State()
+    WATERMARK_TEXT = State()
     ATTACHING_MEDIA = State()
     EDITING_FORMAT = State()
     HIDDEN_EXTENSION_BTN = State()

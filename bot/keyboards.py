@@ -54,19 +54,21 @@ def check_add_menu():
 
 def get_user_kb(data: dict):
     user_kb = InlineKeyboardMarkup()
-
+    
     if data.get("hidden_extension_btn"):
         user_kb.add(InlineKeyboardButton(data["hidden_extension_btn"], callback_data = "hidden_extension_use"))
 
     url_buttons = data.get("url_buttons")
     if url_buttons:
         if isinstance(url_buttons, list):
-            user_kb.add(*data["url_buttons"])
+            for btn in url_buttons:
+                user_kb.inline_keyboard.append([btn])
+
         elif isinstance(url_buttons, str):
             for i, btn in enumerate(url_buttons.split('\n')):
                 if btn:
                     name, url = btn.split(' - ')
-                    user_kb.inline_keyboard.insert(i + 1, [InlineKeyboardButton(name, url)])
+                    user_kb.inline_keyboard.insert(i + 1, [[InlineKeyboardButton(name, url)]])
 
     user_kb = user_kb if user_kb.inline_keyboard else None
     return user_kb
@@ -102,3 +104,9 @@ def get_edit_planed_post_kb(post_id: int):
         [InlineKeyboardButton('Видалити', callback_data = f'remove_planed_post_{post_id}')]
     ])
     return kb
+
+def get_autodelete_kb():
+    return InlineKeyboardMarkup(
+        inline_keyboard = [[InlineKeyboardButton(f'{i}h', callback_data = f'set_autodelete_{i}') for i in range(1, 49)]],
+        row_width = 8
+    )

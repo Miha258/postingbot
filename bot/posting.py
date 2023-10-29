@@ -15,7 +15,6 @@ from db.account import Posts
 from utils import IsAdminFilter
 
 data = {}
-
 def get_kb():
     kb = InlineKeyboardMarkup(inline_keyboard = [
     [
@@ -25,13 +24,16 @@ def get_kb():
     ],
     [
         InlineKeyboardButton("URL-кнопки", callback_data = "url_buttons"),
-        InlineKeyboardButton("Парсинг: HTML", callback_data = "markdown") if data.get("parse_mode") == "html" else InlineKeyboardButton("Парсинг: Markdown", callback_data = "html"),
+        InlineKeyboardButton("Парсинг: HTML", callback_data = "markdown") if data.get("parse_mode") == types.ParseMode.HTML else InlineKeyboardButton("Парсинг: Markdown", callback_data = "html"),
     ],
     [
         InlineKeyboardButton("Увімкнути  коментарі", callback_data = "comments_on") if not data["comments"] else InlineKeyboardButton("Вимкнути коментарі", callback_data = "comments_off")
     ],
     [
-        InlineKeyboardButton("Додати автопідпис", callback_data = "watermark_on") if not data["watermark"] else InlineKeyboardButton("Прибрати автопідпис", callback_data = "watermark_off")
+        InlineKeyboardButton("Додати автопідпис", callback_data = "watermark_on") if not data["watermark"] else InlineKeyboardButton(f"Прибрати автопідпис ({data.get('watermark')})", callback_data = "watermark_off")
+    ],
+    [  
+        InlineKeyboardButton("Автовидалення", callback_data = "autodelete_on") if not data["autodelete"] else InlineKeyboardButton(f"Прибрати автовидалення ({round((data.get('autodelete') - datetime.datetime.now()).seconds / 3600)}h)", callback_data = "autodelete_off")
     ],
     [InlineKeyboardButton("Відредагувати", callback_data = "change_post_data")] if data.get('is_editing') else [
         InlineKeyboardButton("Відкласти", callback_data = "delay_post"),
@@ -85,11 +87,12 @@ async def process_new_post(message: types.Message, state: FSMContext):
     data.clear()
     data["text"] = None
     data["url_buttons"] = []
-    data["watermark"] = False
+    data["watermark"] = None
     data["comments"] = False
     data["notify"] = False
-    data["parse_mode"] = "html"
+    data["parse_mode"] = types.ParseMode.MARKDOWN
     data["media"] = None
+    data["autodelete"] = None
     data["datetime"] = (await state.get_data()).get('datetime')
     await message.answer("Надішліть текст, картику або відео поста")
     await state.set_state(EditStates.EDITING_TEXT)
@@ -113,8 +116,16 @@ async def edit_post_command(callback_query: types.CallbackQuery, state: FSMConte
         case "hidden_extension":
             await state.set_state(EditStates.HIDDEN_EXTENSION_BTN)
             await message.answer("Введіть назву кнопки з прихованим продовженням:", reply_markup = back_to_edit)  
-        case "watermark_off" | "watermark_on":
-            await watermark_handler(callback_query, state)
+        case "watermark_on":
+            await state.set_state(EditStates.WATERMARK_TEXT)
+            await message.answer("Введіть текст автопідпису:", reply_markup = back_to_edit)  
+        case "watermark_off":
+            await remove_watermark_handler(callback_query, state)
+        case "autodelete_on":
+            await state.set_state(EditStates.AUTODELETE)
+            await message.answer("Виберіть, через скільки часу мені видалити пост:", reply_markup = get_autodelete_kb().add(back_to_edit.inline_keyboard[0][0]))  
+        case "autodelete_off":
+            remove_autodelete_handler(callback_query, state)
         case "comments_off" | "comments_on":
             await comments_handler(callback_query, state)
         case "markdown" | "html":
@@ -140,13 +151,12 @@ async def edit_post_command(callback_query: types.CallbackQuery, state: FSMConte
             await parse_mode_handler(callback_query, state)
         case _:
             return
-    
 
 async def editing_text_handler(message: types.Message, state: FSMContext):
     if not data["text"]:
         data["media"] = message.photo[-1] if message.photo else message.video
     
-    data["text"] = message.text or message.caption 
+    data["text"] = message.md_text or message.caption if data.get('parse_mode') == types.ParseMode.MARKDOWN else message.text or message.caption 
     media = data.get("media")
     kb = get_kb()
     if media:
@@ -161,7 +171,6 @@ async def editing_text_handler(message: types.Message, state: FSMContext):
 
 async def attaching_media_handler(message: types.Message, state: FSMContext):
     data["media"] = message.photo[-1] if message.photo else message.video
-    
     kb = get_kb()
     media = data.get('media')
     if media:
@@ -169,7 +178,7 @@ async def attaching_media_handler(message: types.Message, state: FSMContext):
             await message.answer_photo(media.file_id, caption = data["text"], parse_mode = data.get("parse_mode"), reply_markup = kb)
         elif isinstance(media, types.Video):
             await message.answer_video(media.file_id, caption = data["text"], parse_mode = data.get("parse_mode"), reply_markup = kb)
-    else:
+    else:    
         await message.answer(data["text"], parse_mode = data.get("parse_mode"), reply_markup = kb)
     await state.set_state(BotStates.EDITING_POST)
 
@@ -242,12 +251,50 @@ async def comments_handler(callback_query: types.CallbackQuery, state: FSMContex
     await state.set_state(BotStates.EDITING_POST)
 
 
-async def watermark_handler(callback_query: types.CallbackQuery, state: FSMContext):  
-    data["watermark"] = not data["watermark"]
+async def add_watermark_handler(message: types.Message, state: FSMContext):  
+    data["watermark"] = message.text
+    kb = get_kb()
+    media = data.get('media')
+    if media:
+        if isinstance(media, types.PhotoSize):
+            await message.answer_photo(media.file_id, caption = data["text"], parse_mode = data.get("parse_mode"), reply_markup = kb)
+        elif isinstance(media, types.Video):
+            await message.answer_video(media.file_id, caption = data["text"], parse_mode = data.get("parse_mode"), reply_markup = kb)
+    else:
+        await message.answer(data["text"], parse_mode = data.get("parse_mode"), reply_markup = kb)
+    await state.set_state(BotStates.EDITING_POST)
+
+
+async def remove_watermark_handler(callback_query: types.CallbackQuery, state: FSMContext):  
+    data["watermark"] = None
     kb = get_kb()
     await callback_query.message.edit_reply_markup(reply_markup = kb)
     await state.set_state(BotStates.EDITING_POST)
-    
+
+
+async def set_autodelete_handler(callback_query: types.CallbackQuery, state: FSMContext):  
+    autodelete = datetime.datetime.now() + datetime.timedelta(hours = int(callback_query.data.split('_')[-1]))
+    autodelete = autodelete.replace(microsecond = 0)
+    data['autodelete'] = autodelete
+    message = callback_query.message
+    kb = get_kb()
+    media = data.get('media')
+    if media:
+        if isinstance(media, types.PhotoSize):
+            await message.answer_photo( media.file_id, caption = data["text"], parse_mode = data.get("parse_mode"), reply_markup = kb)
+        elif isinstance(media, types.Video):
+            await message.answer_video(media.file_id, caption = data["text"], parse_mode = data.get("parse_mode"), reply_markup = kb)
+    else:
+        await message.answer(data["text"], parse_mode = data.get("parse_mode"), reply_markup = kb)
+    await state.set_state(BotStates.EDITING_POST)
+
+
+async def remove_autodelete_handler(callback_query: types.CallbackQuery, state: FSMContext):  
+    data["watermark"] = None
+    kb = get_kb()
+    await callback_query.message.edit_reply_markup(reply_markup = kb)
+    await state.set_state(BotStates.EDITING_POST) 
+
 
 async def repost_handler(callback_query: types.Message, state: FSMContext):
     data["reposts"] = not data["reposts"]
@@ -258,9 +305,8 @@ async def repost_handler(callback_query: types.Message, state: FSMContext):
 
 async def parse_mode_handler(callback_query: types.CallbackQuery, state: FSMContext):
     parse_mode = callback_query.data
-    data["parse_mode"] = parse_mode
+    data["parse_mode"] = types.ParseMode.HTML if parse_mode == 'html' else types.ParseMode.MARKDOWN
     await state.set_data({"parse_mode": parse_mode})
-    
     kb = get_kb()
     await callback_query.message.edit_reply_markup(kb)
     await state.set_state(BotStates.EDITING_POST)
@@ -268,12 +314,12 @@ async def parse_mode_handler(callback_query: types.CallbackQuery, state: FSMCont
 
 async def url_button_handler(message: types.Message, state: FSMContext):
     try:
-        regex_pattern = r'([^\-]+) - ([^\n]+)'
-        matches = re.findall(regex_pattern, message.text)
+        matches = message.text.split('\n')
         kb = None
         if matches:
             kb = types.InlineKeyboardMarkup(row_width = 1)
-            for name, link in matches:
+            for btn in matches:
+                name, link = btn.split(' - ')
                 btn = types.InlineKeyboardButton(text = name, url = link)
                 data["url_buttons"].append(btn)
 
@@ -291,7 +337,8 @@ async def url_button_handler(message: types.Message, state: FSMContext):
         await message.answer("Некоректне посилання.Cпробуйте ще раз")
     except IndexError:
         await message.answer("Некоректний формат.Cпробуйте ще раз")
-
+    except ValueError:
+        await message.answer("Некоректний формат.Cпробуйте ще раз")
 
 async def remove_url_button_handler(callback_query: types.CallbackQuery, state: FSMContext):
     data["url_buttons"].clear()
@@ -351,7 +398,8 @@ async def delay_post_handler(message: types.Message, state: FSMContext):
             data.get('watermark'),
             data.get('notify'),
             date,
-            await media.get_url() if media else None
+            await media.get_url() if media else None,
+            data.get('autodelete')
         )
         data.clear()
         await message.answer(f"Пост буде опубліковано: <b>{date}</b>", parse_mode = "html", reply_markup = make_new_post_kb)
@@ -368,25 +416,28 @@ async def send_post(user_kb: InlineKeyboardMarkup, channel: str = None, _data: d
     media = data.get('media')
     disable_notification = not data.get("notify")
     text = data.get('text') or data.get('post_text')
+    parse_mode = data.get("parse_mode")
     
-    if data.get('watermark'):
+    watermark = data.get('watermark')
+    if watermark:
         chat = await bot.get_chat(channel)
-        text += f'\n\n<a href="{await chat.get_url()}">Підписатися - {chat.full_name}</a>'
+        chat_url = await chat.get_url()
+        text += f'\n\n<a href="{chat_url}">{watermark}</a>' if parse_mode == 'html' else f'\n\n[{watermark}]({chat_url})'
     
     if media:
         if isinstance(media, types.PhotoSize):
-            post = await bot.send_photo(channel, media.file_id, caption = text, parse_mode = data.get("parse_mode"), reply_markup = user_kb, disable_notification = disable_notification)
+            post = await bot.send_photo(channel, media.file_id, caption = text, parse_mode = parse_mode, reply_markup = user_kb, disable_notification = disable_notification)
         elif isinstance(media, types.Video):
-            post = await bot.send_video(channel, media.file_id, caption = text, parse_mode = data.get("parse_mode"), reply_markup = user_kb, disable_notification = disable_notification) 
+            post = await bot.send_video(channel, media.file_id, caption = text, parse_mode = parse_mode, reply_markup = user_kb, disable_notification = disable_notification) 
         elif isinstance(media, str):
             file = await fetch_media_bytes(media)
             is_video = types.InputMediaVideo(file).duration
             if is_video:
-                post = await bot.send_video(channel, file, caption = text, parse_mode = data.get("parse_mode"), reply_markup = user_kb, disable_notification = disable_notification) 
+                post = await bot.send_video(channel, file, caption = text, parse_mode = parse_mode, reply_markup = user_kb, disable_notification = disable_notification) 
             elif not is_video:
-                post = await bot.send_photo(channel, file, caption = text, parse_mode = data.get("parse_mode"), reply_markup = user_kb, disable_notification = disable_notification)
+                post = await bot.send_photo(channel, file, caption = text, parse_mode = parse_mode, reply_markup = user_kb, disable_notification = disable_notification)
     else:
-        post = await bot.send_message(channel, text, parse_mode = data.get("parse_mode"), reply_markup = user_kb, disable_notification = disable_notification)
+        post = await bot.send_message(channel, text, parse_mode = parse_mode, reply_markup = user_kb, disable_notification = disable_notification)
     
     if data.get("comments"):
         await asyncio.sleep(5)
@@ -432,7 +483,8 @@ async def create_post(callback_query: types.CallbackQuery, state: FSMContext):
         data.get('notify'),
         data.get('watermark'),
         data.get('delay'),
-        await media.get_url() if media else None
+        await media.get_url() if media else None,
+        data.get('autodelete')
     )
     data.clear()
     await state.finish()
@@ -513,9 +565,9 @@ async def change_post_data(callback_query: types.CallbackQuery, state: FSMContex
     user_kb = get_user_kb(data)
     
     text = data['text']
-    if data.get('watermark'):
-        chat = await bot.get_chat(post['channel_id'])
-        text += f'\n\n<a href="{await chat.get_url()}">Підписатися - {chat.full_name}</a>'
+    watermark = data.get('watermark')
+    if watermark:
+        text += watermark
     try:
         if media:
             media_file_id = media.file_id
@@ -546,30 +598,34 @@ async def change_post_data(callback_query: types.CallbackQuery, state: FSMContex
             data.get("comments"),
             data.get("notify"),
             data.get("watermark"),
-            await media.get_url() if media else None
+            await media.get_url() if media else None,
+            data.get('autodelete')
         )
         await callback_query.message.answer(f'<b><a href="{post.url}">Пост</a> успішно відредаговано</b>', parse_mode = "html")
         await state.finish()
 
     except Unauthorized:
         await message.answer("Щоб вимкнути коментарі - додайте мене у бесіду каналу")
-
+            
 async def post_manager():
+    date_format = "%Y-%m-%d %H:%M:%S"
     while True:
         posts = await Posts.get("bot_id", bot.id, True)
         if posts:
             for post in posts:
-                # try:
-                    post_data = post.data 
-                    delay = post_data.get("delay")
-                    if delay:  
-                        if datetime.datetime.strptime(delay, "%Y-%m-%d %H:%M:%S") <= datetime.datetime.now():
-                            user_kb = get_user_kb(post_data)
-                            msg = await send_post(user_kb, post_data["channel_id"], post_data)
-                            await Posts.update("id", post_data["id"], delay = None, id = msg.message_id)
-                # except Exception as e:
-                #     print(e)
-            await asyncio.sleep(5)
+                post_data = post.data 
+                delay = post_data.get("delay")
+                autodelete = post_data.get('autodelete')
+                if delay:  
+                    if datetime.datetime.strptime(delay, date_format) <= datetime.datetime.now():
+                        user_kb = get_user_kb(post_data)
+                        msg = await send_post(user_kb, post_data["channel_id"], post_data)
+                        await Posts.update("id", post_data["id"], delay = None, id = msg.message_id)
+                if autodelete:
+                    if datetime.datetime.strptime(autodelete, date_format) <= datetime.datetime.now():
+                        await bot.delete_message(post_data["channel_id"], post_data["id"])
+                        await Posts.delete(post_data["id"])
+        await asyncio.sleep(5)
 
 def register_posting(dp: Dispatcher):
     asyncio.get_event_loop().create_task(post_manager())
@@ -584,6 +640,8 @@ def register_posting(dp: Dispatcher):
     dp.register_message_handler(hidden_extension_handler_1, state = EditStates.HIDDEN_EXTENSION_BTN)
     dp.register_message_handler(hidden_extension_handler_2, state = EditStates.HIDDEN_EXTENSION_TEXT_1)
     dp.register_message_handler(init_hidden_extension_handler, state = EditStates.HIDDEN_EXTENSION_TEXT_2)
+    dp.register_message_handler(add_watermark_handler, state = EditStates.WATERMARK_TEXT)
+    dp.register_callback_query_handler(set_autodelete_handler, state = EditStates.AUTODELETE)
     dp.register_callback_query_handler(parse_mode_handler, state = EditStates.PARSE_MODE)
     dp.register_message_handler(delay_post_handler, state = EditStates.DATE) 
     dp.register_callback_query_handler(choose_date_handler, lambda cb: "calendar_day" in cb.data, state = EditStates.DATE)

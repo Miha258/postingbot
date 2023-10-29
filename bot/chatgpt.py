@@ -7,14 +7,14 @@ async def get_chat_gpt_answer(prompt, history):
     token = random.choice(tokens)
     openai.api_key = token["token"]
 
-    prompt_with_history = f"Hello\n"
+    prompt_with_history = f"Привіт\n"
     for message in history:
         prompt_with_history += f"You: {message}\nAssistant: "
 
     response = openai.Completion.create(
-        engine = "text-davinci-002",  # You can choose other engines if needed
+        engine = "text-davinci-002",
         prompt = prompt_with_history + "You: " + prompt + "\nAssistant: ",
-        max_tokens = 150  # Adjust this value to control the response length
+        max_tokens = 150
     )
     
     if 'choices' in response:
@@ -34,4 +34,3 @@ async def enter_question(user_id, prompt):
         
     answer = await get_chat_gpt_answer(prompt, chat_history[user_id])
     return answer
-   

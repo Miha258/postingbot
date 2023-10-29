@@ -43,6 +43,7 @@ async def custom_greatings_kb():
             
 
     kb.add(InlineKeyboardButton('Додати', callback_data = 'add_custom_greet'))
+    kb.add(InlineKeyboardButton('Редагувати', callback_data = 'edit_button_greet_notify'))
     return kb
 
 
@@ -224,7 +225,7 @@ async def add_custom_greet(callback_query: types.CallbackQuery, state: FSMContex
 
 
 async def custom_greet_buttons(message: types.Message, state: FSMContext):
-    await state.update_data({'greet_text': message.caption or message.text, 'media': message.photo[-1] if message.photo else message.video})
+    await state.update_data({'greet_text': message.caption or message.md_text, 'media': message.photo[-1] if message.photo else message.video})
     await message.answer("Введіть кнопку у форматі: \n<em>1. Кнопка - посилання</em>\n<em>2. Кнопка - посилання</em>\n<em>3. Кнопка - посилання</em>",parse_mode = "html")
     await state.set_state(CustomGreetSatates.BUTTONS)
 
@@ -260,13 +261,19 @@ async def procces_custom_greet(message: types.Message, state: FSMContext):
     """, reply_markup = await custom_greatings_kb())
     await state.finish()
 
+
+async def edit_button_greet_notify(callback_query: types.CallbackQuery):
+    await callback_query.answer('Оберіть привітання, яке хочете відредагувати у правій колонці', show_alert = True)
+
+
 async def edit_custom_greet(callback_query: types.CallbackQuery, state: FSMContext):
     data = callback_query.data
     greet_id = int(data.split('_')[-1])
     greet = await Greetings.get('id', greet_id)
     
-    await callback_query.message.answer(greet['greet_text'], reply_markup = await edit_custom_greating_kb(greet_id), parse_mode = 'html')
+    await callback_query.message.answer(greet['greet_text'], reply_markup = await edit_custom_greating_kb(greet_id))
     await state.set_state(CustomGreetSatates.GREET_EDITING)
+
 
 async def edit_custom_greet_handler(callback_query: types.CallbackQuery, state: FSMContext):
     data = callback_query.data
@@ -287,7 +294,7 @@ async def edit_custom_greet_handler(callback_query: types.CallbackQuery, state: 
             await remove_greet_buttons(callback_query, state)
         case "add_custom_greet_buttons":
             await callback_query.message.delete()
-            await callback_query.message.answer("Введіть кнопку у форматі: \n<em>1. Кнопка - посилання</em>\n<em>2. Кнопка - посилання</em>\n<em>3. Кнопка - посилання</em>",parse_mode = "html")
+            await callback_query.message.answer("Введіть кнопку у форматі: \n<em>1. Кнопка - посилання</em>\n<em>2. Кнопка - посилання</em>\n<em>3. Кнопка - посилання</em>", parse_mode = "html")
             await state.set_state(CustomGreetSatates.EDIT_BUTTONS)
         case 'delete_greet':
             await delete_greet(callback_query, state)
@@ -305,7 +312,7 @@ async def edit_greet_autodelete(callback_query: types.CallbackQuery, state: FSMC
     greet_id = (await state.get_data())['greet_id']
     greet = await Greetings.update('id', greet_id, autodelete = autodelete)
     
-    await callback_query.message.edit_text(greet['greet_text'], reply_markup = await edit_custom_greating_kb(greet_id), parse_mode = 'html')
+    await callback_query.message.edit_text(greet['greet_text'], reply_markup = await edit_custom_greating_kb(greet_id))
     await state.set_state(CustomGreetSatates.GREET_EDITING)
 
 async def edit_greet_delay(callback_query: types.CallbackQuery, state: FSMContext):
@@ -313,27 +320,27 @@ async def edit_greet_delay(callback_query: types.CallbackQuery, state: FSMContex
     greet_id = (await state.get_data())['greet_id']
     greet = await Greetings.update('id', greet_id, delay = delay)
     
-    await callback_query.message.edit_text(greet['greet_text'], reply_markup = await edit_custom_greating_kb(greet_id), parse_mode = 'html')
+    await callback_query.message.edit_text(greet['greet_text'], reply_markup = await edit_custom_greating_kb(greet_id))
     await state.set_state(CustomGreetSatates.GREET_EDITING)
 
 async def edit_greet_buttons(message: types.Message, state: FSMContext):
-    regex_pattern = r'([^\-]+) - ([^\n]+)'
-    matches = re.findall(regex_pattern, message.text)
+    matches = message.text.split('\n')
     buttons = ""
-    if matches:
-        for name, link in matches:
-            try:
+    try:
+        if matches:
+            for btn in matches:
+                name, link = btn.split(' - ')
                 InlineKeyboardButton(name, link)
-            except:
-                pass
-            else:
+                await message.edit_text(message.md_text)
                 buttons += (name + '-' + link + '\n')
     
-    greet_id = (await state.get_data())['greet_id']
-    greet = await Greetings.update('id', greet_id, buttons = buttons)
+        greet_id = (await state.get_data())['greet_id']
+        greet = await Greetings.update('id', greet_id, buttons = buttons)
 
-    await message.answer(greet['greet_text'], reply_markup = await edit_custom_greating_kb(greet_id))
-    await state.set_state(CustomGreetSatates.GREET_EDITING)
+        await message.answer(greet['greet_text'], reply_markup = await edit_custom_greating_kb(greet_id))
+        await state.set_state(CustomGreetSatates.GREET_EDITING)
+    except ValueError:
+        await message.answer("Некоректний формат.Cпробуйте ще раз")
 
 async def remove_greet_buttons(callback_query: types.CallbackQuery, state: FSMContext):
     greet_id = (await state.get_data())['greet_id']
@@ -345,9 +352,9 @@ async def remove_greet_buttons(callback_query: types.CallbackQuery, state: FSMCo
 
 async def edit_greet_text(message: types.Message, state: FSMContext):
     greet_id = (await state.get_data())['greet_id']
-    await Greetings.update('id', greet_id, greet_text = message.tetx)
+    await Greetings.update('id', greet_id, greet_text = message.md_text)
 
-    await message.edit_text(message.text)
+    await message.edit_text(message.md_text)
     await state.set_state(CustomGreetSatates.GREET_EDITING)
 
 
@@ -372,6 +379,7 @@ def register_greet(dp: Dispatcher):
     dp.register_callback_query_handler(edit_custom_greet, lambda cb: "edit_custom_greet" in cb.data)
     dp.register_callback_query_handler(edit_custom_greet_handler, state = CustomGreetSatates.GREET_EDITING)
     dp.register_message_handler(edit_greet_buttons, state = CustomGreetSatates.EDIT_BUTTONS)
+    dp.register_callback_query_handler(edit_button_greet_notify, lambda cb: cb.data == 'edit_button_greet_notify')
     dp.register_callback_query_handler(edit_greet_autodelete, state = CustomGreetSatates.EDIT_AUTODELETE)
     dp.register_callback_query_handler(edit_greet_delay, state = CustomGreetSatates.EDIT_DELAY)
     dp.register_callback_query_handler(option_handler, lambda cb: cb.data in options.values())
