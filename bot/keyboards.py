@@ -108,12 +108,9 @@ def get_edit_planed_post_kb(post_id: int):
 def get_autodelete_kb() -> InlineKeyboardMarkup:
     kb = InlineKeyboardMarkup()
     button_rows = [
-        [1, 2, 4, 6, 8],
-        [10, 12, 14, 16],
-        [18, 20, 22, 24],
-        [26, 28, 30, 32],
-        [34, 36, 38, 40],
-        [42, 44, 46, 48]
+        [24],
+        [48],
+        [72]
     ]
     buttons = []
     for row in button_rows:
