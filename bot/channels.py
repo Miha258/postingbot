@@ -90,12 +90,12 @@ async def update_channel_handler(message: types.Message, state: FSMContext):
                 if channel["bot_id"] == bot.id:
                     await message.answer("Цей канал вже додано.Спробуйте інший:")
                 else:
-                    await Channels(message.message_id, chat_id = chat.id, bot_id = bot.id, name = chat.full_name, subscribers = await chat.get_members_count())()
+                    await Channels(message.message_id, chat_id = chat.id, bot_id = bot.id, name = chat.full_name, subscribers = await chat.get_members_count(), watermark = None)()
                     await message.answer("Канал успішно доданий!")
                     set_channel(str(chat.id))
                     await state.finish()
             else:
-                await Channels(message.message_id, chat_id = chat.id, bot_id = bot.id, name = chat.full_name, subscribers = await chat.get_members_count())()
+                await Channels(message.message_id, chat_id = chat.id, bot_id = bot.id, name = chat.full_name, subscribers = await chat.get_members_count(), watermark = None)()
                 await message.answer("Канал успішно доданий!")
                 set_channel(str(chat.id))
                 await state.finish()

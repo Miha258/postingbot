@@ -105,8 +105,22 @@ def get_edit_planed_post_kb(post_id: int):
     ])
     return kb
 
-def get_autodelete_kb():
-    return InlineKeyboardMarkup(
-        inline_keyboard = [[InlineKeyboardButton(f'{i}h', callback_data = f'set_autodelete_{i}') for i in range(1, 49)]],
-        row_width = 8
-    )
+def get_autodelete_kb() -> InlineKeyboardMarkup:
+    kb = InlineKeyboardMarkup()
+    button_rows = [
+        [1, 2, 4, 6, 8],
+        [10, 12, 14, 16],
+        [18, 20, 22, 24],
+        [26, 28, 30, 32],
+        [34, 36, 38, 40],
+        [42, 44, 46, 48]
+    ]
+    buttons = []
+    for row in button_rows:
+        button_row = []
+        for button in row:
+            button_row.append(InlineKeyboardButton(f'{button}h', callback_data = f'set_autodelete_{button}'))
+        buttons.append(button_row)
+    
+    kb.inline_keyboard = buttons
+    return kb

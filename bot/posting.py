@@ -11,7 +11,7 @@ from datetime import datetime
 from states import *
 from utils import *
 from keyboards import *
-from db.account import Posts
+from db.account import Posts, Channels
 from utils import IsAdminFilter
 
 data = {}
@@ -30,10 +30,10 @@ def get_kb():
         InlineKeyboardButton("Увімкнути  коментарі", callback_data = "comments_on") if not data["comments"] else InlineKeyboardButton("Вимкнути коментарі", callback_data = "comments_off")
     ],
     [
-        InlineKeyboardButton("Додати автопідпис", callback_data = "watermark_on") if not data["watermark"] else InlineKeyboardButton(f"Прибрати автопідпис ({data.get('watermark')})", callback_data = "watermark_off")
+        InlineKeyboardButton("Додати автопідпис", callback_data = "watermark_on") if not data["watermark"] else InlineKeyboardButton(f"Прибрати автопідпис ({data.get('watermark')[:20]}...)", callback_data = "watermark_off")
     ],
     [  
-        InlineKeyboardButton("Автовидалення", callback_data = "autodelete_on") if not data["autodelete"] else InlineKeyboardButton(f"Прибрати автовидалення ({round((data.get('autodelete') - datetime.datetime.now()).seconds / 3600)}h)", callback_data = "autodelete_off")
+        InlineKeyboardButton("Автовидалення", callback_data = "autodelete_on") if not data["autodelete"] else InlineKeyboardButton(f"Прибрати автовидалення ({round((data.get('autodelete') - datetime.datetime.now()).total_seconds() / 3600)}h)", callback_data = "autodelete_off")
     ],
     [InlineKeyboardButton("Відредагувати", callback_data = "change_post_data")] if data.get('is_editing') else [
         InlineKeyboardButton("Відкласти", callback_data = "delay_post"),
@@ -87,7 +87,7 @@ async def process_new_post(message: types.Message, state: FSMContext):
     data.clear()
     data["text"] = None
     data["url_buttons"] = []
-    data["watermark"] = None
+    data["watermark"] = (await Channels.get('chat_id', get_channel()))['watermark']
     data["comments"] = False
     data["notify"] = False
     data["parse_mode"] = types.ParseMode.MARKDOWN
@@ -118,14 +118,14 @@ async def edit_post_command(callback_query: types.CallbackQuery, state: FSMConte
             await message.answer("Введіть назву кнопки з прихованим продовженням:", reply_markup = back_to_edit)  
         case "watermark_on":
             await state.set_state(EditStates.WATERMARK_TEXT)
-            await message.answer("Введіть текст автопідпису:", reply_markup = back_to_edit)  
+            await message.answer('Введіть текст з посиланням (<a href="https://example.com/">Підписатися на канал</a>):', reply_markup = back_to_edit, parse_mode = types.ParseMode.HTML)  
         case "watermark_off":
             await remove_watermark_handler(callback_query, state)
         case "autodelete_on":
             await state.set_state(EditStates.AUTODELETE)
             await message.answer("Виберіть, через скільки часу мені видалити пост:", reply_markup = get_autodelete_kb().add(back_to_edit.inline_keyboard[0][0]))  
         case "autodelete_off":
-            remove_autodelete_handler(callback_query, state)
+            await remove_autodelete_handler(callback_query, state)
         case "comments_off" | "comments_on":
             await comments_handler(callback_query, state)
         case "markdown" | "html":
@@ -251,8 +251,10 @@ async def comments_handler(callback_query: types.CallbackQuery, state: FSMContex
     await state.set_state(BotStates.EDITING_POST)
 
 
-async def add_watermark_handler(message: types.Message, state: FSMContext):  
-    data["watermark"] = message.text
+async def add_watermark_handler(message: types.Message, state: FSMContext):
+    id = (await Channels.get('chat_id', get_channel()))["id"]
+    await Channels.update("id", id, watermark = message.text)
+    data["watermark"] = message.md_text if data.get('parse_mode') == types.ParseMode.MARKDOWN else message.html_text
     kb = get_kb()
     media = data.get('media')
     if media:
@@ -290,7 +292,7 @@ async def set_autodelete_handler(callback_query: types.CallbackQuery, state: FSM
 
 
 async def remove_autodelete_handler(callback_query: types.CallbackQuery, state: FSMContext):  
-    data["watermark"] = None
+    data["autodelete"] = None
     kb = get_kb()
     await callback_query.message.edit_reply_markup(reply_markup = kb)
     await state.set_state(BotStates.EDITING_POST) 
@@ -417,12 +419,9 @@ async def send_post(user_kb: InlineKeyboardMarkup, channel: str = None, _data: d
     disable_notification = not data.get("notify")
     text = data.get('text') or data.get('post_text')
     parse_mode = data.get("parse_mode")
-    
     watermark = data.get('watermark')
     if watermark:
-        chat = await bot.get_chat(channel)
-        chat_url = await chat.get_url()
-        text += f'\n\n<a href="{chat_url}">{watermark}</a>' if parse_mode == 'html' else f'\n\n[{watermark}]({chat_url})'
+        text += "\n\n" + watermark
     
     if media:
         if isinstance(media, types.PhotoSize):
