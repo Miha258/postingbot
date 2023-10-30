@@ -121,6 +121,7 @@ async def start_bots(_):
         "bot_id": "INT",
         "name": "TEXT",
         "subscribers": "INT",
+        "watermark": "TEXT"
     })
 
     await Paynaments.init_table({
@@ -160,9 +161,10 @@ async def start_bots(_):
         "parse_mode": "TEXT",
         "comments": "BOOLEAN",
         "notify": "BOOLEAN",
-        "watermark": "BOOLEAN",
+        "watermark": "TEXT",
         "delay": "DATE",
-        "media": "TEXT"
+        "media": "TEXT",
+        "autodelete": "DATE"
     })
     
     user_bots = await Bots.all()
