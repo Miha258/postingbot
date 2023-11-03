@@ -3,10 +3,10 @@ import os, sys
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
 from aiogram.types import ParseMode
 
-bot_token = "5323882359:AAFIUxLGcdgiEzEsYShmI6CwI9FvX1oKZOc"
+bot_token = sys.argv[1]
 bot = Bot(token = bot_token, parse_mode = ParseMode.HTML)
-owner = "1095610815"
-bot_type = "posting"
+owner = sys.argv[2]
+bot_type = sys.argv[3]
 storage = MemoryStorage()
 
 def get_channel():
