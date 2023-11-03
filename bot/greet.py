@@ -19,9 +19,18 @@ options = {
 }
 channels = {}
 
-kb = InlineKeyboardMarkup(inline_keyboard = [
-    [InlineKeyboardButton(name, callback_data = data)] for name, data in list(options.items())
-])
+def get_greet_options_kb():
+    channel = get_channel()
+    options_list = list(options.items())
+    options_list.pop()
+    kb = InlineKeyboardMarkup(inline_keyboard = [
+        [InlineKeyboardButton(name + " Вкл.", callback_data = data)] 
+        if data in channels[channel]["types"] 
+        else [InlineKeyboardButton(name + " Викл.", callback_data = data)] 
+        for name, data in options_list
+    ])
+    kb.add(InlineKeyboardButton("💌 Повідомлення", callback_data = "set_greet_text"))
+    return kb
 
 async def custom_greatings_kb():
     greetings = await Greetings.get('channel_id', get_channel(), True)
@@ -86,54 +95,35 @@ async def edit_custom_greating_kb(greet_id: int):
 
 async def greet_menu(message: types.Message):
     channel = get_channel()
-    if channels.get(channel):
-        greeting_message = channels[channel]["greeting_message"]
-    else:
-        greeting_message = "немає"
+    if not channels.get(channel):
         channels[channel] = {
-            "greeting_message": greeting_message,
-            "type": "off"
+            "types": []
         }
-    await message.answer('Виберіть опцію:', reply_markup = kb, parse_mode = 'html')
+    await message.answer('Виберіть опцію:', reply_markup = get_greet_options_kb(), parse_mode = 'html')
 
 
 async def option_handler(callback_query: types.CallbackQuery, state: FSMContext):
     bot = await Bots.get("id", callback_query.message.from_id)
-
+    type = callback_query.data
     if bot:
-        if callback_query.data == "chatgpt" and not bot["subscription"]:
+        if type == "chatgpt" and not bot["subscription"]:
             return await callback_query.answer("Ця функці доступна лише після покупки тарифу", show_alert = True)
-
-    channel = get_channel()
-    if not channels.get(channel):
-        channels[channel] = {"type": "off"}
     
-    if channels[channel]["type"] == "off": 
-        channels[channel]["type"] = callback_query.data
-        button = get_button_by_callback_data(channels[channel]["type"], kb)
-        button.text = "🔹" + button.text
-        if callback_query.data == "set_greet_text":
-            await callback_query.message.answer(
-            """
-            💌 Повідомлення
-
-            Налаштовуй повідомлення, які отримає користувач при взаємодії з підключеним каналом.
-            """, reply_markup = await custom_greatings_kb())
+    channel = get_channel()
+    if type in channels[channel]['types']:
+         channels[channel]['types'].remove(type)
     else:
-        button = get_button_by_callback_data(channels[channel]["type"], kb)
-        button.text = button.text.removeprefix("🔹")
-        
-        channels[channel]["type"] = callback_query.data
-        button = get_button_by_callback_data(channels[channel]["type"], kb)
-        button.text = "🔹" + button.text
-        if callback_query.data == "set_greet_text":
-            await callback_query.message.answer(
-            """
-            💌 Повідомлення
+        channels[channel]['types'].append(type)
 
-            Налаштовуй повідомлення, які отримає користувач при взаємодії з підключеним каналом.
-            """, reply_markup = await custom_greatings_kb())
-    await callback_query.message.edit_reply_markup(kb)
+    if type == "set_greet_text":
+        await callback_query.message.answer(
+    """
+    💌 Повідомлення
+
+    Налаштовуй повідомлення, які отримає користувач при взаємодії з підключеним каналом.
+    """, reply_markup = await custom_greatings_kb())
+    else:
+        await callback_query.message.edit_reply_markup(get_greet_options_kb())
 
 
 async def bot_checking(request: types.ChatJoinRequest):
@@ -166,16 +156,6 @@ async def check_season(message: types.Message, state: FSMContext):
     await message.reply("Ви відмовились від перевірки.")  
 
 
-async def set_greet_text(message: types.Message, state: FSMContext):
-    greeting_message = message.text
-    channel = get_channel()
-    channels[channel]["greeting_message"] = greeting_message
-    
-    await greet_menu(message)
-    await state.finish()
-
-
-
 async def send_custom_greet_to_user(request: types.ChatJoinRequest):
     channel = request.chat.id
     greets = await Greetings.get('channel_id', channel, True)
@@ -206,17 +186,16 @@ async def send_custom_greet_to_user(request: types.ChatJoinRequest):
 
 
 async def greeting_request_handler(request: types.ChatJoinRequest):
+    await send_custom_greet_to_user(request)
     channel: str = channels.get(str(request.chat.id))
     if channel:
-        request_type = channel["type"]
-        if request_type != "off":
-            match request_type:
+        request_types = channel['types']
+        for type in request_types:
+            match type:
                 case "bot_checking":
                     await bot_checking(request)
                 case "chatgpt":
                     await chat_gpt(request)
-                case "set_greet_text":
-                    await send_custom_greet_to_user(request)
                         
 
 async def add_custom_greet(callback_query: types.CallbackQuery, state: FSMContext):
@@ -225,7 +204,7 @@ async def add_custom_greet(callback_query: types.CallbackQuery, state: FSMContex
 
 
 async def custom_greet_buttons(message: types.Message, state: FSMContext):
-    await state.update_data({'greet_text': message.caption or message.md_text, 'media': message.photo[-1] if message.photo else message.video})
+    await state.update_data({'greet_text': message.caption or message.html_text, 'media': message.photo[-1] if message.photo else message.video})
     await message.answer("Введіть кнопку у форматі: \n<em>1. Кнопка - посилання</em>\n<em>2. Кнопка - посилання</em>\n<em>3. Кнопка - посилання</em>",parse_mode = "html")
     await state.set_state(CustomGreetSatates.BUTTONS)
 
@@ -331,7 +310,7 @@ async def edit_greet_buttons(message: types.Message, state: FSMContext):
             for btn in matches:
                 name, link = btn.split(' - ')
                 InlineKeyboardButton(name, link)
-                await message.edit_text(message.md_text)
+                await message.edit_text(message.html_text)
                 buttons += (name + '-' + link + '\n')
     
         greet_id = (await state.get_data())['greet_id']
@@ -352,9 +331,9 @@ async def remove_greet_buttons(callback_query: types.CallbackQuery, state: FSMCo
 
 async def edit_greet_text(message: types.Message, state: FSMContext):
     greet_id = (await state.get_data())['greet_id']
-    await Greetings.update('id', greet_id, greet_text = message.md_text)
+    await Greetings.update('id', greet_id, greet_text = message.html_text)
 
-    await message.edit_text(message.md_text)
+    await message.edit_text(message.html_text)
     await state.set_state(CustomGreetSatates.GREET_EDITING)
 
 

@@ -149,7 +149,10 @@ async def join_request_handler(request: types.ChatJoinRequest):
     await greeting_request_handler(request)
     channel_id = str(request.chat.id)
     channel = channels.get(channel_id)
-    channels[channel_id]["requests"].append(request)
+    if channels.get(channel_id):
+        channels[channel_id]["requests"].append(request)
+    else:
+        channels[channel_id] = {"requests": [request]}
     if channel:
         request_type = channel["type"]
         match request_type:

@@ -57,19 +57,32 @@ def get_user_kb(data: dict):
     
     if data.get("hidden_extension_btn"):
         user_kb.add(InlineKeyboardButton(data["hidden_extension_btn"], callback_data = "hidden_extension_use"))
-
+    
     url_buttons = data.get("url_buttons")
     if url_buttons:
+        row_btns = []
+        column_buttons = 0
         if isinstance(url_buttons, list):
             for btn in url_buttons:
-                user_kb.inline_keyboard.append([btn])
+                if isinstance(btn, list):
+                    user_kb.inline_keyboard.insert(column_buttons, btn)
+                    column_buttons += 1
+                elif isinstance(btn, InlineKeyboardButton):
+                    row_btns.append(btn)
 
         elif isinstance(url_buttons, str):
             for i, btn in enumerate(url_buttons.split('\n')):
                 if btn:
-                    name, url = btn.split(' - ')
-                    user_kb.inline_keyboard.insert(i + 1, [[InlineKeyboardButton(name, url)]])
-
+                    column_buttons = btn.split(' - ')
+                    row_buttons = btn.split(' | ')
+                    if len(column_buttons) > 1:
+                        name, url = column_buttons
+                        user_kb.inline_keyboard.insert(i + 1, [InlineKeyboardButton(name, url)])
+                    elif len(row_buttons) > 1:
+                        name, url = row_buttons
+                        row_btns.append(InlineKeyboardButton(name, url))
+        if row_btns:
+            user_kb.inline_keyboard.insert(0, row_btns)
     user_kb = user_kb if user_kb.inline_keyboard else None
     return user_kb
 
