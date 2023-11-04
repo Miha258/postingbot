@@ -7,7 +7,7 @@ from create_bot import bot
 import re
 
 async def ask_media(message: types.Message, state: FSMContext):
-    await message.answer("Надішліть текст, фото/відео:", reply_markup = skip_menu())
+    await message.answer("Надішліть текст, фото/відео:", reply_markup = back_to_menu())
     await state.set_state(BotAdds.MEDIA)
 
 
@@ -84,6 +84,6 @@ def register_adds(dp: Dispatcher):
     dp.register_message_handler(ask_media, lambda m: m.text == "Розсилка", state = "*")
     dp.register_message_handler(ask_media, lambda m: m.text == "Редагувати", state = BotAdds.CHECK)
     dp.register_message_handler(skip_btn, lambda m: m.text == "Пропустити", state = BotAdds.BTN)
-    dp.register_message_handler(ask_for_btn, state = BotAdds.MEDIA, content_types = types.ContentTypes.PHOTO | types.ContentTypes.VIDEO)
+    dp.register_message_handler(ask_for_btn, state = BotAdds.MEDIA, content_types = types.ContentTypes.PHOTO | types.ContentTypes.VIDEO | types.ContentTypes.TEXT)
     dp.register_message_handler(check_adds, state = BotAdds.BTN, content_types = types.ContentTypes.TEXT)
     dp.register_message_handler(send_adds_to_users, lambda m: m.text == "Опублікувати", state = BotAdds.CHECK)
