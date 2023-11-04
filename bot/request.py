@@ -146,7 +146,6 @@ async def set_timeout(message: types.Message, state: FSMContext):
 
 
 async def join_request_handler(request: types.ChatJoinRequest):
-    await greeting_request_handler(request)
     channel_id = str(request.chat.id)
     channel = channels.get(channel_id)
     if channels.get(channel_id):
@@ -162,6 +161,7 @@ async def join_request_handler(request: types.ChatJoinRequest):
                 await auto_request(request)
             case "disable":
                 await disable_request(request)
+    await greeting_request_handler(request)
     
 def register_request(dp: Dispatcher):
     dp.register_callback_query_handler(option_handler, lambda query: query.data in options.values())

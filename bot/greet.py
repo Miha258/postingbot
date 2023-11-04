@@ -186,7 +186,7 @@ async def send_custom_greet_to_user(request: types.ChatJoinRequest):
 
 
 async def greeting_request_handler(request: types.ChatJoinRequest):
-    await send_custom_greet_to_user(request)
+    asyncio.create_task(send_custom_greet_to_user(request))
     channel: str = channels.get(str(request.chat.id))
     if channel:
         request_types = channel['types']
