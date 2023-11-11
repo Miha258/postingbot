@@ -4,6 +4,7 @@ from aiogram.dispatcher.filters.state import State, StatesGroup
 class BotStates(StatesGroup):
     ADDING_POST = State()
     EDITING_POST = State()
+    EDITING_CAPCHA = State()
     ADDING_CHANNEL = State()
     BOT_CHECKING = State()
     CHAT_GPT = State()

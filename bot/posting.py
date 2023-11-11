@@ -2,7 +2,6 @@ from create_bot import bot, get_channel
 import asyncio
 from aiogram.utils.exceptions import Unauthorized, FileIsTooBig
 from aiogram.utils.callback_data import CallbackData
-import aiogram.utils.markdown as md
 from aiogram import types, Dispatcher
 from aiogram.dispatcher import FSMContext
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
@@ -13,16 +12,15 @@ from states import *
 from utils import *
 from keyboards import *
 from db.account import Posts, Channels
-from utils import IsAdminFilter
 
 data = {}
+preview = True
 def get_kb():
     watermark = data.get('watermark')
     if watermark:
         watermark = re.search(r'<a.*?>(.*?)</a>', watermark) or re.search(r'\[([^\]]+)\]\([^)]+\)', watermark)
         if watermark:
             watermark = watermark.group(1)
-            
     kb = InlineKeyboardMarkup(inline_keyboard = [
     [
         InlineKeyboardButton("Змінити текст", callback_data = "edit_text"),
@@ -41,6 +39,9 @@ def get_kb():
     ],
     [  
         InlineKeyboardButton("Автовидалення", callback_data = "autodelete_on") if not data["autodelete"] else InlineKeyboardButton(f"Прибрати автовидалення ({round((data.get('autodelete') - datetime.datetime.now()).total_seconds() / 3600)}h)", callback_data = "autodelete_off")
+    ],
+    [  
+        InlineKeyboardButton("Превю: вкл", callback_data = "set_preview") if preview else InlineKeyboardButton(f"Превю: викл", callback_data = "set_preview")
     ],
     [InlineKeyboardButton("Відредагувати", callback_data = "change_post_data")] if data.get('is_editing') else [
         InlineKeyboardButton("Відкласти", callback_data = "delay_post"),
@@ -65,40 +66,42 @@ def get_kb():
     
     if data.get('is_editing'):
         remove_button_by_callback_data("watermark_off", kb)
+        remove_button_by_callback_data("comments_on", kb)
+        remove_button_by_callback_data("comments_off", kb)
         if not data.get('media'):
             remove_button_by_callback_data("disattach_media", kb)
             kb.inline_keyboard.insert(0, [InlineKeyboardButton("Замінити медіа", callback_data = "attach_media")])
-   
+    
     url_buttons = data.get("url_buttons")
-    if url_buttons:
-        row_btns = []
-        column_buttons = 0
-        for btn in url_buttons:
-            if isinstance(btn, list):
-                kb.inline_keyboard.insert(column_buttons, btn)
-                column_buttons += 1
-            elif isinstance(btn, InlineKeyboardButton):
-                row_btns.append(btn)
-        if row_btns:
-            kb.inline_keyboard.insert(0, row_btns)
+    if preview:
+        if url_buttons:
+            row_btns = []
+            column_buttons = 0
+            for btn in url_buttons:
+                if isinstance(btn, list):
+                    kb.inline_keyboard.insert(column_buttons, btn)
+                    column_buttons += 1
+                elif isinstance(btn, InlineKeyboardButton):
+                    row_btns.append(btn)
+            if row_btns:
+                kb.inline_keyboard.insert(0, row_btns)
 
-        kb.inline_keyboard.insert(len(url_buttons), [
-            InlineKeyboardButton("Прибрати URL-кнопки", callback_data = "remove_url_buttons")
-        ])
+            kb.inline_keyboard.insert(len(url_buttons), [
+                InlineKeyboardButton("Прибрати URL-кнопки", callback_data = "remove_url_buttons")
+            ])
         
-
     if data.get("hidden_extension_btn"):
         kb.inline_keyboard.insert(len(url_buttons), [
             InlineKeyboardButton("Видалити приховане продовження", callback_data = "hidden_extension_remove")
         ]) 
-        kb.inline_keyboard.insert(len(url_buttons), [
-            InlineKeyboardButton(data["hidden_extension_btn"], callback_data = "hidden_extension_use")
-        ]) 
+        if preview:
+            kb.inline_keyboard.insert(len(url_buttons), [
+                InlineKeyboardButton(data["hidden_extension_btn"], callback_data = "hidden_extension_use")
+            ]) 
     else:
         kb.inline_keyboard.insert(len(url_buttons),  [
              InlineKeyboardButton("Приховане продовження", callback_data = "hidden_extension")
         ]) 
-    
     return kb
 
 
@@ -151,7 +154,7 @@ async def edit_post_command(callback_query: types.CallbackQuery, state: FSMConte
             await parse_mode_handler(callback_query, state)
         case "url_buttons":
             await state.set_state(EditStates.URL_BUTTONS)
-            await message.answer("Введіть кнопку у форматі: \n<em>1. Кнопка - посилання</em>\n<em>2. Кнопка - посилання</em>\n<em>3. Кнопка - посилання</em>\n\n<strong>Використовуйте | щоб кнопки поставити кнопеи в один рядок:</strong>\n\n<em>1. Кнопка | посилання</em>\n<em>2. Кнопка | посилання</em>\n<em>3. Кнопка | посилання</em>", parse_mode = "html")
+            await message.answer("Введіть кнопку у форматі: \n<em>1. Кнопка - посилання</em>\n<em>2. Кнопка - посилання</em>\n<em>3. Кнопка - посилання</em>\n\n<strong>Використовуйте | щоб кнопки поставити кнопеи в один рядок:</strong>\n\n<em>1. Кнопка - посилання | Кнопка - посилання</em>\n<em>2. Кнопка - посилання | Кнопка - посилання</em>\n<em>3. Кнопка - посилання | Кнопка - посилання</em>", parse_mode = "html")
         case "remove_url_buttons":
             await remove_url_button_handler(callback_query, state) 
         case "notify_on" | "notify_off":
@@ -177,7 +180,11 @@ async def editing_text_handler(message: types.Message, state: FSMContext):
     if not data["url_buttons"] and message.reply_markup:
         data["url_buttons"] = message.reply_markup.inline_keyboard
     
-    data["text"] = message.md_text or message.caption if data.get("parse_mode") == types.ParseMode.MARKDOWN else message.html_text or message.caption
+    if message.text or message.caption:
+        data["text"] = message.md_text or message.caption if data.get("parse_mode") == types.ParseMode.MARKDOWN else message.html_text or message.caption
+    else:
+        return await message.answer('Тепер введіть текст поста:')
+  
     media = data.get("media")
     kb = get_kb()
     if media:
@@ -203,6 +210,15 @@ async def attaching_media_handler(message: types.Message, state: FSMContext):
         await message.answer(data["text"], parse_mode = data.get("parse_mode"), reply_markup = kb)
     await state.set_state(BotStates.EDITING_POST)
 
+
+async def set_preview(callback_query: types.CallbackQuery):
+    global preview
+    if preview:
+        preview = False
+    else:
+        preview = True
+    kb = get_kb()
+    await callback_query.message.edit_reply_markup(reply_markup = kb)
 
 
 async def disattaching_media_handler(message: types.Message, state: FSMContext):
@@ -338,20 +354,20 @@ async def parse_mode_handler(callback_query: types.CallbackQuery, state: FSMCont
     
 
 async def url_button_handler(message: types.Message, state: FSMContext):
-    # try:
+    try:
         matches = message.text.split('\n')
         kb = None
         if matches:
             kb = types.InlineKeyboardMarkup(row_width = 1)
             for btn in matches:
-                column_buttons = btn.split(' - ')
-                row_buttons = btn.split(' | ')
-                if len(column_buttons) > 1:
-                    name, url = column_buttons
-                    data["url_buttons"].append([InlineKeyboardButton(name, url)])
-                elif len(row_buttons) > 1:
-                    name, url = row_buttons
-                    data["url_buttons"].append(InlineKeyboardButton(name, url))
+                if '|' in btn:
+                    rows = btn.split(' | ')
+                    data["url_buttons"].append([InlineKeyboardButton(row.split(' - ')[0], row.split(' - ')[1]) for row in rows])
+                else:
+                    column_buttons = btn.split(' - ')
+                    if len(column_buttons) > 1:
+                        name, url = column_buttons
+                        data["url_buttons"].append([InlineKeyboardButton(name, url)])
 
         kb = get_kb()
         media = data.get('media')
@@ -363,12 +379,12 @@ async def url_button_handler(message: types.Message, state: FSMContext):
         else:
             await message.answer(data["text"], parse_mode = data.get("parse_mode"), reply_markup = kb)
         await state.set_state(BotStates.EDITING_POST)
-    # except BadRequest:
-    #     await message.answer("Некоректне посилання.Cпробуйте ще раз")
-    # except IndexError:
-    #     await message.answer("Некоректний формат.Cпробуйте ще раз")
-    # except ValueError:
-    #     await message.answer("Некоректний формат.Cпробуйте ще раз")
+    except BadRequest:
+        await message.answer("Некоректне посилання.Cпробуйте ще раз")
+    except IndexError:
+        await message.answer("Некоректний формат.Cпробуйте ще раз")
+    except ValueError:
+        await message.answer("Некоректний формат.Cпробуйте ще раз")
 
 async def remove_url_button_handler(callback_query: types.CallbackQuery, state: FSMContext):
     data["url_buttons"].clear()
@@ -409,11 +425,16 @@ async def delay_post_handler(message: types.Message, state: FSMContext):
             
             data["delay"] = date
             data["delay_str"] = date_string
+            await state.set_state(EditStates.COMFIRM)
+            await message.answer("Виберіть дію:", reply_markup = confirm_deley_post_kb)
         else:                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  
             await message.answer("Невірний формат дати.Спробуйте ще раз")
+
+async def comfirm_delay_post(callback_query: types.CallbackQuery, state: FSMContext):
     try:
+        message = callback_query.message
         media = data.get('media')
-        date = date_time or data.get('delay')
+        date = data.get("datetime") or data.get('delay')
         await Posts.save_post(
             message.message_id, 
             bot.id,
@@ -561,13 +582,22 @@ async def edit_post(message: types.Message, state: FSMContext):
         data['is_editing'] = True
         data['text'] = data['post_text']
         data['media'] = message.photo[-1] if message.photo else message.video
-        data['watermark'] = (await Channels.get('chat_id', get_channel()))['watermark']
-
+        data['watermark'] = (await Channels.get('chat_id', message.forward_from_chat.id))['watermark']
         url_buttons = []
+
         for btn in data.get('url_buttons').split('\n'):
-            btn = btn.split('-')
-            if btn[0]:
-                url_buttons.append(types.InlineKeyboardButton(btn[0], btn[1].strip()))
+            if '|' in btn:
+                rows = btn.split(' | ')
+                row_buttons = []
+                for row in rows:
+                    name, url = row.split(' - ')
+                    row_buttons.append(InlineKeyboardButton(name, url))
+                url_buttons.append(row_buttons)
+            else:
+                column_buttons = btn.split(' - ')
+                if len(column_buttons) > 1:
+                    name, url = column_buttons
+                    url_buttons.append([InlineKeyboardButton(name, url)])
 
         data['url_buttons'] = url_buttons
         kb = get_kb()
@@ -657,6 +687,8 @@ async def post_manager():
 
 def register_posting(dp: Dispatcher):
     asyncio.get_event_loop().create_task(post_manager())
+    dp.register_message_handler(process_new_post, lambda m: m.text == 'Постинг', IsAdminFilter(), IsChannel())
+    dp.register_callback_query_handler(set_preview, lambda cb: cb.data == 'set_preview', state = "*")
     dp.register_callback_query_handler(back_to_editing, lambda cb: "back_to_edit" == cb.data, state = "*")
     dp.register_message_handler(choose_post_for_edit, lambda m: m.text == 'Редагувати пост', IsAdminFilter(), state = '*')
     dp.register_message_handler(edit_post, state = BotStates.CHANGE_POST, content_types = [types.ContentType.TEXT, types.ContentType.VIDEO, types.ContentType.PHOTO])
@@ -672,7 +704,8 @@ def register_posting(dp: Dispatcher):
     dp.register_message_handler(add_watermark_handler, state = EditStates.WATERMARK_TEXT)
     dp.register_callback_query_handler(set_autodelete_handler, state = EditStates.AUTODELETE)
     dp.register_callback_query_handler(parse_mode_handler, state = EditStates.PARSE_MODE)
-    dp.register_message_handler(delay_post_handler, state = EditStates.DATE) 
+    dp.register_message_handler(delay_post_handler, state = EditStates.DATE)
+    dp.register_callback_query_handler(comfirm_delay_post, lambda cb: cb.data == "delay_post", state = EditStates.COMFIRM)
     dp.register_callback_query_handler(choose_date_handler, lambda cb: "calendar_day" in cb.data, state = EditStates.DATE)
     dp.register_callback_query_handler(set_calendar_month, lambda cb: cb.data in ("prev_month", "next_month"), state = EditStates.DATE)
     dp.register_callback_query_handler(cancle_post, lambda cb: "cancle_post" == cb.data, state = EditStates.COMFIRM)

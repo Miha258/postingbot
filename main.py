@@ -121,7 +121,8 @@ async def start_bots(_):
         "bot_id": "INT",
         "name": "TEXT",
         "subscribers": "INT",
-        "watermark": "TEXT"
+        "watermark": "TEXT",
+        "capcha": "TEXT"
     })
 
     await Paynaments.init_table({

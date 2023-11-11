@@ -6,22 +6,11 @@ from states import *
 from aiogram.dispatcher import FSMContext
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.utils.callback_data import CallbackData
-from posting import process_new_post
 from aiogram.utils.exceptions import Unauthorized, BotKicked, BotBlocked
-from request import mode_selector
 from utils import IsAdminFilter
 from keyboards import *
 from datetime import datetime
-from greet import greet_menu
-from content_plan import content_plan_list
 
-
-channel_type = {
-    "Постинг": "createpost",
-    "Керування заявками": "request",
-    "Привітання": "greet",
-    "Контент-план": "content-plan"
-}
 
 async def choose_channels(message: types.Message, state: FSMContext):
     channels = await Channels.get("bot_id", bot.id, True)
@@ -29,7 +18,7 @@ async def choose_channels(message: types.Message, state: FSMContext):
         [InlineKeyboardButton("Додати канал +", callback_data = "add_channel")],
     ])
     if channels:
-        kb.add(*[InlineKeyboardButton(channel["name"], callback_data = f"channel_{channel_type[message.text]}_{channel['chat_id']}") for channel in channels])
+        kb.add(*[InlineKeyboardButton(channel["name"], callback_data = f"channel_{channel['chat_id']}") for channel in channels])
     
     kb.add(back_btn)
     await message.reply("Виберіть канал зі списку:", reply_markup = kb)
@@ -40,8 +29,7 @@ async def choose_channel_handler(callback_query: types.CallbackQuery, state: FSM
     await state.finish()
     message = callback_query.message
     data = callback_query.data.split('_')
-    operation_type = data[1]
-    channel_id = data[2]
+    channel_id = data[1]
     await callback_query.message.delete() 
     _bot = await Bots.get("id", bot.id)
 
@@ -62,15 +50,8 @@ async def choose_channel_handler(callback_query: types.CallbackQuery, state: FSM
             return await message.answer("Схоже я був забанений у каналі.Розблокуйте мене і спробуйте ще раз")
     
     set_channel(channel_id)
-    match operation_type:
-        case "createpost":
-            await process_new_post(message, state)
-        case "request":
-            await mode_selector(message)
-        case "greet":
-            await greet_menu(message)
-        case "content-plan":
-            await content_plan_list(message, state)
+    await message.answer("Ви успішно вибрали канал, тепер скористайтесь меню:")
+    await state.finish()
 
 async def update_channel(callback_query: types.CallbackQuery, state: FSMContext):
     await callback_query.answer("Перешліть мені повідомлення з каналу:", show_alert = True)
@@ -104,6 +85,6 @@ async def update_channel_handler(message: types.Message, state: FSMContext):
 
 def register_channels(dp: Dispatcher):
     dp.register_callback_query_handler(update_channel, CallbackData("add_channel").filter(), state = "*")
-    dp.register_message_handler(choose_channels, lambda m: m.text in channel_type.keys(), IsAdminFilter(), state = "*")
+    dp.register_message_handler(choose_channels, lambda m: m.text == 'Вибрати канал', IsAdminFilter(), state = "*")
     dp.register_message_handler(update_channel_handler, state = BotStates.SET_CHANNEL, content_types = types.ContentTypes.ANY)
     dp.register_callback_query_handler(choose_channel_handler, state = BotStates.CHOOSE_CHANNEL)

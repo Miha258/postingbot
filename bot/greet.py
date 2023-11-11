@@ -7,9 +7,9 @@ from utils import *
 from create_bot import bot, get_channel , storage
 import re
 import asyncio
-from db.account import Bots, Users, Greetings
+from db.account import Bots, Users, Greetings, Channels
 from chatgpt import *
-from utils import fetch_media_bytes
+from keyboards import edit_capcha_kb
 
 channels = {}
 options = {
@@ -102,7 +102,7 @@ async def greet_menu(message: types.Message):
     await message.answer('Виберіть опцію:', reply_markup = get_greet_options_kb(), parse_mode = 'html')
 
 
-async def option_handler(callback_query: types.CallbackQuery, state: FSMContext):
+async def option_handler(callback_query: types.CallbackQuery):
     bot = await Bots.get("id", callback_query.message.from_id)
     type = callback_query.data
     if bot:
@@ -110,10 +110,16 @@ async def option_handler(callback_query: types.CallbackQuery, state: FSMContext)
             return await callback_query.answer("Ця функці доступна лише після покупки тарифу", show_alert = True)
     
     channel = get_channel()
-    if type in channels[channel]['types']:
-         channels[channel]['types'].remove(type)
+    if type == 'bot_checking':
+        capcha = (await Channels.get("chat_id", get_channel()))['capcha']
+        capcha_text, capcha_btns = capcha.split(' - ')
+        return await callback_query.message.edit_text(f'<b>Текст капчі:</b> \n\n{capcha_text if capcha_text else "Немає"}', reply_markup = edit_capcha_kb(type in channels[channel]['types'], capcha_btns))
+
     else:
-        channels[channel]['types'].append(type)
+        if type in channels[channel]['types']:
+            channels[channel]['types'].remove(type)
+        else:
+            channels[channel]['types'].append(type)
 
     if type == "set_greet_text":
         await callback_query.message.answer(
@@ -126,8 +132,64 @@ async def option_handler(callback_query: types.CallbackQuery, state: FSMContext)
         await callback_query.message.edit_reply_markup(get_greet_options_kb())
 
 
+async def change_bot_checking_status(callback_query: types.CallbackQuery):
+    channel = get_channel()
+    type = "bot_checking"
+    if type in channels[channel]['types']:
+        channels[channel]['types'].remove(type)
+    else:
+        channels[channel]['types'].append(type)
+    capcha = (await Channels.get("chat_id", channel))['capcha']
+    capcha_btns = capcha.split(' - ')[1]
+    await callback_query.message.edit_reply_markup(edit_capcha_kb(type in channels[channel]['types'], capcha_btns))
+
+async def edit_capcha(callback_query: types.CallbackQuery, state: FSMContext):
+    await callback_query.message.answer('Введіть текст у форматі \n\n <em>Текст капчі - кнопка1 | відповідь1 , кнопка2 | відповідть2</em>')
+    await state.set_state(BotStates.EDITING_CAPCHA)
+
+
+async def update_bot_checking_text(message: types.Message, state: FSMContext):
+    try:
+        capcha_text, capcha_btns = message.text.split(' - ')
+        if ' , ' not in message.text:
+            reply, answer = capcha_btns.split(' | ')
+        else:
+            capcha_data = capcha_btns.split(' , ')
+            capcha_answers = {}
+            for data in capcha_data:
+                reply, answer = data.split(' | ')
+    except:
+        await message.answer('Невірний формат капчі.Cпробуйте ще раз:')
+    else:
+        capcha_answers[reply] = answer
+        channel = get_channel()
+        channel_id = (await Channels.get("chat_id", channel))['id']
+        capcha = (await Channels.update("id", channel_id, capcha = message.text))['capcha']
+        capcha_text, capcha_btns = capcha.split(' - ')
+        await message.answer(f'<b>Текст капчі:</b> \n\n{capcha_text if capcha_text else "Немає"}', reply_markup = edit_capcha_kb(type in channels[channel]['types'], capcha_btns))
+        await state.finish()
+    
+
+async def back_to_greet_menu(callback_query: types.CallbackQuery, state: FSMContext):
+    channel = get_channel()
+    if not channels.get(channel):
+        channels[channel] = {
+            "types": []
+        }
+    await callback_query.message.edit_text('Виберіть опцію:', reply_markup = get_greet_options_kb(), parse_mode = 'html')
+    await state.finish()
+
 async def bot_checking(request: types.ChatJoinRequest):
-    await bot.send_message(request.user_chat_id, f"Підтвердіть, що ви <b>не робот</b>:", reply_markup = ReplyKeyboardMarkup(keyboard = [[KeyboardButton("Я не робот 🟢"), KeyboardButton("Відмовитись 🔴")]], resize_keyboard = True),parse_mode = "html")
+    capcha = (await Channels.get("chat_id", request.chat.id))['capcha']
+    capcha_text, capcha_btns = capcha.split(' - ')
+    btns = []
+    if capcha_btns:
+        capcha_data = capcha_btns.split(' , ')
+        for data in capcha_data:
+            reply = data.split(' | ')[0]
+            btns.append(KeyboardButton(reply))
+        
+    await bot.send_message(request.user_chat_id, capcha_text, reply_markup = ReplyKeyboardMarkup(keyboard = [btns], resize_keyboard = True))
     await storage.set_state(chat = request.user_chat_id, state = BotStates.BOT_CHECKING)
     await asyncio.sleep(1024)
     await request.approve()
@@ -145,20 +207,32 @@ async def chat_gpt_answer(message: types.Message):
     await message.answer(answer, parse_mode = "html")
 
 
-async def check_season(message: types.Message, state: FSMContext):
+async def check_capcha(message: types.Message, state: FSMContext):
     if not await Users.get('id', message.from_id):
         await Users(message.from_id, bot_id = bot.id)()
+    
+    channel = get_channel()
+    capcha = (await Channels.get("chat_id", channel))['capcha']
+    capcha_btns = capcha.split(' - ')[1]
+    capcha_answers = {}
+    if ' , ' not in capcha_btns:
+        reply, answer = capcha_btns.split(' | ')
+        capcha_answers[reply] = answer
+    else:
+        capcha_data = capcha_btns.split(' , ')
+        for data in capcha_data:
+            reply, answer = data.split(' | ')
+            capcha_answers[reply] = answer
+    
+    reply = capcha_answers.get(message.text)
+    if reply:
+        await message.answer(reply)
+        await state.finish()
+    await send_custom_greet_to_user(channel, message.from_id)
 
-    if message.text in "Я не робот 🟢":
-        await message.reply(f"Перевірку <b>пройдено!</b>", parse_mode = "html")
-        return await state.finish()
 
-    await message.reply("Ви відмовились від перевірки.")  
-
-
-async def send_custom_greet_to_user(request: types.ChatJoinRequest):
-    channel = request.chat.id
-    greets = await Greetings.get('channel_id', channel, True)
+async def send_custom_greet_to_user(chat_id: int, user_id: int):
+    greets = await Greetings.get('channel_id', chat_id, True)
     if greets:
         for greet in greets:
             autodelete: int = greet['autodelete']
@@ -176,9 +250,9 @@ async def send_custom_greet_to_user(request: types.ChatJoinRequest):
                         kb.add(InlineKeyboardButton(name, url))
             
             if image:
-                msg = await bot.send_photo(request.from_user.id, image, greet_text, reply_markup = kb, parse_mode = 'html') 
+                msg = await bot.send_photo(user_id, image, greet_text, reply_markup = kb, parse_mode = 'html') 
             else:
-                msg = await bot.send_message(request.from_user.id, greet_text, reply_markup = kb, parse_mode = 'html')
+                msg = await bot.send_message(user_id, greet_text, reply_markup = kb, parse_mode = 'html')
             
             if autodelete:  
                 await asyncio.sleep(autodelete * 60)
@@ -186,7 +260,6 @@ async def send_custom_greet_to_user(request: types.ChatJoinRequest):
 
 
 async def greeting_request_handler(request: types.ChatJoinRequest):
-    asyncio.create_task(send_custom_greet_to_user(request))
     channel: str = channels.get(str(request.chat.id))
     if channel:
         request_types = channel['types']
@@ -352,7 +425,12 @@ async def delete_greet(callback_query: types.CallbackQuery, state: FSMContext):
 
 
 def register_greet(dp: Dispatcher):
+    dp.register_message_handler(greet_menu, lambda m: m.text == 'Привітання', IsAdminFilter(), IsChannel())
+    dp.register_callback_query_handler(back_to_greet_menu, lambda cb: cb.data == 'back_to_greet_menu')
     dp.register_callback_query_handler(add_custom_greet, lambda cb: cb.data == 'add_custom_greet')
+    dp.register_callback_query_handler(edit_capcha, lambda cb: cb.data == 'edit_capcha')
+    dp.register_callback_query_handler(change_bot_checking_status, lambda cb: cb.data == 'set_capcha_status')
+    dp.register_message_handler(update_bot_checking_text, state = BotStates.EDITING_CAPCHA)
     dp.register_message_handler(custom_greet_buttons, state = CustomGreetSatates.MEDIA, content_types = types.ContentTypes.TEXT | types.ContentTypes.PHOTO | types.ContentTypes.VIDEO)
     dp.register_message_handler(procces_custom_greet, state = CustomGreetSatates.BUTTONS)
     dp.register_callback_query_handler(edit_custom_greet, lambda cb: "edit_custom_greet" in cb.data)
@@ -362,5 +440,5 @@ def register_greet(dp: Dispatcher):
     dp.register_callback_query_handler(edit_greet_autodelete, state = CustomGreetSatates.EDIT_AUTODELETE)
     dp.register_callback_query_handler(edit_greet_delay, state = CustomGreetSatates.EDIT_DELAY)
     dp.register_callback_query_handler(option_handler, lambda cb: cb.data in options.values())
-    dp.register_message_handler(check_season, state = BotStates.BOT_CHECKING)
+    dp.register_message_handler(check_capcha, state = BotStates.BOT_CHECKING)
     dp.register_message_handler(chat_gpt_answer, state = BotStates.CHAT_GPT)

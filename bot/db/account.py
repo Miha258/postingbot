@@ -85,8 +85,7 @@ class Posts(Table):
         media: str = None,
         autodelete: datetime = None
     ):
-        print(url_buttons)
-        url_buttons = "".join([ "".join([b.text + " | " + b.url + "\n" for b in btn]) if isinstance(btn, list) else btn.text + " - " + btn.url + "\n" for btn in url_buttons])
+        url_buttons = "".join([ "".join([b.text + " - " + b.url + ("\n" if b == btn[-1] else " | ") for b in btn]) if isinstance(btn, list) else btn.text + " - " + btn.url + "\n" for btn in url_buttons])
         await cls(id, 
             bot_id = bot_id, 
             channel_id = channel_id,
@@ -119,7 +118,7 @@ class Posts(Table):
         media: str = None,
         autodelete: datetime = None
     ):
-        url_buttons = "".join([btn.text + " - " + btn.url + "\n" for btn in url_buttons])
+        url_buttons = "".join([ "".join([b.text + " - " + b.url + ("\n" if b == btn[-1] else " | ") for b in btn]) if isinstance(btn, list) else btn.text + " - " + btn.url + "\n" for btn in url_buttons])
         await cls.update(
             "id",
             id,

@@ -5,6 +5,7 @@ from db.account import Users
 from keyboards import *
 from create_bot import bot
 import re
+from utils import IsAdminFilter
 
 async def ask_media(message: types.Message, state: FSMContext):
     await message.answer("Надішліть текст, фото/відео:", reply_markup = back_to_menu())
@@ -81,7 +82,7 @@ async def send_adds_to_users(message: types.Message, state: FSMContext):
 
 
 def register_adds(dp: Dispatcher):
-    dp.register_message_handler(ask_media, lambda m: m.text == "Розсилка", state = "*")
+    dp.register_message_handler(ask_media, lambda m: m.text == "Розсилка", IsAdminFilter(), state = "*")
     dp.register_message_handler(ask_media, lambda m: m.text == "Редагувати", state = BotAdds.CHECK)
     dp.register_message_handler(skip_btn, lambda m: m.text == "Пропустити", state = BotAdds.BTN)
     dp.register_message_handler(ask_for_btn, state = BotAdds.MEDIA, content_types = types.ContentTypes.PHOTO | types.ContentTypes.VIDEO | types.ContentTypes.TEXT)

@@ -152,7 +152,7 @@ async def join_request_handler(request: types.ChatJoinRequest):
     if channels.get(channel_id):
         channels[channel_id]["requests"].append(request)
     else:
-        channels[channel_id] = {"requests": [request]}
+        channels[channel_id] = {"requests": [request], "type": "off"}
     if channel:
         request_type = channel["type"]
         match request_type:
@@ -164,6 +164,7 @@ async def join_request_handler(request: types.ChatJoinRequest):
                 await disable_request(request)
     
 def register_request(dp: Dispatcher):
+    dp.register_message_handler(mode_selector, lambda m: m.text == 'Керування заявками', IsAdminFilter(), IsChannel())
     dp.register_callback_query_handler(option_handler, lambda query: query.data in options.values())
     dp.register_chat_join_request_handler(join_request_handler)
     dp.register_message_handler(set_amount, state = BotStates.AMOUNT)

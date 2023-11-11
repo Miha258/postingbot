@@ -8,7 +8,7 @@ from states import ContentPlan
 from posting import process_new_post
 from keyboards import *
 from re import search
-from utils import fetch_media_bytes
+from utils import fetch_media_bytes, IsAdminFilter
 
 async def get_plan_kb(date: datetime.datetime, full = False):
     posts = await Posts.get('channel_id', get_channel(), True)
@@ -196,6 +196,7 @@ async def edit_post_date(message: types.Message, state: FSMContext):
             await message.answer("Невірний формат дати.Спробуйте ще раз")
 
 def register_content_plan(dp: Dispatcher):
+    dp.register_message_handler(content_plan_list, lambda m: m.text == "Контент-план", IsAdminFilter())
     dp.register_callback_query_handler(plan_post, lambda cb: cb.data == "plan_post", state = ContentPlan.CHOOSE_DAY)
     dp.register_callback_query_handler(set_day, lambda cb: cb.data in ('next_day', 'prev_day'), state = ContentPlan.CHOOSE_DAY)
     dp.register_callback_query_handler(set_calendar_state, lambda cd: cd.data == "full_calendar", state = ContentPlan.CHOOSE_DAY)

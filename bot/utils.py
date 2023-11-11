@@ -1,7 +1,7 @@
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, Message
 import aiohttp
 from aiogram.dispatcher.filters import BoundFilter
-from create_bot import owner
+from create_bot import owner, get_channel
 
 def get_button_by_callback_data(callback_query: str, keyboard: InlineKeyboardMarkup) -> InlineKeyboardButton:
     for row in keyboard.inline_keyboard:
@@ -25,3 +25,11 @@ async def fetch_media_bytes(url):
 class IsAdminFilter(BoundFilter):
     async def check(self, message: Message) -> bool:
         return message.from_user.id == int(owner)
+    
+class IsChannel(BoundFilter):
+    async def check(self, message: Message) -> bool:
+        if get_channel():
+            return True
+        else:
+            await message.answer('Ви не вибрали канал, скористайтеся меню, щоб це зробити:')
+            return False

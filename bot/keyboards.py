@@ -6,12 +6,19 @@ back_btn = InlineKeyboardButton('Повернутися в меню', callback_d
 back_to_edit = InlineKeyboardMarkup(inline_keyboard = [
     [InlineKeyboardButton('Повернутися до редагування', callback_data = "back_to_edit")]
 ])
+
 make_new_post_kb = InlineKeyboardMarkup(inline_keyboard = [
     [InlineKeyboardButton('Створити ще один пост', callback_data = 'create_post_again')]
 ])
+
 confirm_post_kb = InlineKeyboardMarkup(inline_keyboard = [
     [InlineKeyboardButton('Скасувати', callback_data = 'cancle_post')],
     [InlineKeyboardButton('Підтвердити', callback_data = 'create_post')]
+])
+
+confirm_deley_post_kb = InlineKeyboardMarkup(inline_keyboard = [
+    back_to_edit.inline_keyboard[0],
+    [InlineKeyboardButton('Відкласти пост', callback_data = 'delay_post')]
 ])
 
 def main_menu():
@@ -29,6 +36,7 @@ def main_menu():
     
     markup = ReplyKeyboardMarkup(resize_keyboard = True, keyboard = [
         buttons,
+        [KeyboardButton("Вибрати канал")],
         [KeyboardButton("Тарифи")]
     ])
     return markup
@@ -52,6 +60,25 @@ def check_add_menu():
     keyboard.add(KeyboardButton('Повернутися в меню'))
     return keyboard
 
+def edit_capcha_kb(status = False, capcha_buttons: str = None):
+    inline_markup = InlineKeyboardMarkup(inline_keyboard = [
+        [InlineKeyboardButton('Редагувати', callback_data = 'edit_capcha')],
+        [InlineKeyboardButton('Вимкнути', callback_data = 'set_capcha_status')] if status else [InlineKeyboardButton('Увімкнути', callback_data = 'set_capcha_status')],
+        [InlineKeyboardButton('Повернутися в меню', callback_data = 'back_to_greet_menu')]
+    ])
+
+    if capcha_buttons:
+        capcha_data = capcha_buttons.split(' , ')
+        capcha_answers = {}
+        btns = []
+        for data in capcha_data:
+            reply, answer = data.split('|')
+            capcha_answers[reply] = answer
+            btns.append(InlineKeyboardButton(reply, callback_data = '_'))
+        inline_markup.inline_keyboard.insert(0, btns)
+
+    return inline_markup
+
 def get_user_kb(data: dict):
     user_kb = InlineKeyboardMarkup()
     
@@ -60,9 +87,9 @@ def get_user_kb(data: dict):
     
     url_buttons = data.get("url_buttons")
     if url_buttons:
-        row_btns = []
-        column_buttons = 0
         if isinstance(url_buttons, list):
+            row_btns = []
+            column_buttons = 0
             for btn in url_buttons:
                 if isinstance(btn, list):
                     user_kb.inline_keyboard.insert(column_buttons, btn)
@@ -71,16 +98,20 @@ def get_user_kb(data: dict):
                     row_btns.append(btn)
 
         elif isinstance(url_buttons, str):
+            row_btns = 0
             for i, btn in enumerate(url_buttons.split('\n')):
                 if btn:
-                    column_buttons = btn.split(' - ')
-                    row_buttons = btn.split(' | ')
-                    if len(column_buttons) > 1:
-                        name, url = column_buttons
+                    if ' | ' not in btn:
+                        name, url = btn.split(' - ')
                         user_kb.inline_keyboard.insert(i + 1, [InlineKeyboardButton(name, url)])
-                    elif len(row_buttons) > 1:
-                        name, url = row_buttons
-                        row_btns.append(InlineKeyboardButton(name, url))
+                    elif ' | ' in btn:
+                        btns = []
+                        for b in btn.split(' | '):
+                            name, url = b.split(' - ')
+                            btns.append(InlineKeyboardButton(name, url))
+                        user_kb.inline_keyboard.insert(row_btns, btns)
+                    
+
         if row_btns:
             user_kb.inline_keyboard.insert(0, row_btns)
     user_kb = user_kb if user_kb.inline_keyboard else None
