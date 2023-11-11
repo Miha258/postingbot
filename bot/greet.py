@@ -112,6 +112,8 @@ async def option_handler(callback_query: types.CallbackQuery):
     channel = get_channel()
     if type == 'bot_checking':
         capcha = (await Channels.get("chat_id", get_channel()))['capcha']
+        if not capcha:
+            capcha = await Channels.update("chat_id", get_channel(), capcha = "Пройдіть перевірку на бота - Відмовитися | Ви відмовилися від перевірки , Підтвердити | Перевірку пройдено")
         capcha_text, capcha_btns = capcha.split(' - ')
         return await callback_query.message.edit_text(f'<b>Текст капчі:</b> \n\n{capcha_text if capcha_text else "Немає"}', reply_markup = edit_capcha_kb(type in channels[channel]['types'], capcha_btns))
 
