@@ -154,7 +154,7 @@ async def edit_post_command(callback_query: types.CallbackQuery, state: FSMConte
             await parse_mode_handler(callback_query, state)
         case "url_buttons":
             await state.set_state(EditStates.URL_BUTTONS)
-            await message.answer("Введіть кнопку у форматі: \n<em>1. Кнопка - посилання</em>\n<em>2. Кнопка - посилання</em>\n<em>3. Кнопка - посилання</em>\n\n<strong>Використовуйте | щоб кнопки поставити кнопеи в один рядок:</strong>\n\n<em>1. Кнопка - посилання | Кнопка - посилання</em>\n<em>2. Кнопка - посилання | Кнопка - посилання</em>\n<em>3. Кнопка - посилання | Кнопка - посилання</em>", parse_mode = "html")
+            await message.answer("Введіть кнопку у форматі: \n<em>1. Кнопка - посилання</em>\n<em>2. Кнопка - посилання</em>\n<em>3. Кнопка - посилання</em>\n\n<strong>Використовуйте | щоб кнопки поставити кнопки в один рядок:</strong>\n\n<em>1. Кнопка - посилання | Кнопка - посилання</em>\n<em>2. Кнопка - посилання | Кнопка - посилання</em>\n<em>3. Кнопка - посилання | Кнопка - посилання</em>", parse_mode = "html")
         case "remove_url_buttons":
             await remove_url_button_handler(callback_query, state) 
         case "notify_on" | "notify_off":
@@ -175,7 +175,7 @@ async def edit_post_command(callback_query: types.CallbackQuery, state: FSMConte
             return
 
 async def editing_text_handler(message: types.Message, state: FSMContext):
-    if not data["text"]:
+    if not data["text"] and not data["media"]:
         data["media"] = message.photo[-1] if message.photo else message.video
     if not data["url_buttons"] and message.reply_markup:
         data["url_buttons"] = message.reply_markup.inline_keyboard
@@ -183,8 +183,8 @@ async def editing_text_handler(message: types.Message, state: FSMContext):
     if message.text or message.caption:
         data["text"] = message.md_text or message.caption if data.get("parse_mode") == types.ParseMode.MARKDOWN else message.html_text or message.caption
     else:
+        data["media"] = message.photo[-1] if message.photo else message.video
         return await message.answer('Тепер введіть текст поста:')
-  
     media = data.get("media")
     kb = get_kb()
     if media:
