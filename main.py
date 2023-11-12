@@ -7,6 +7,7 @@ from aiogram.dispatcher import FSMContext
 from aiogram import executor
 from bot.db.account import Bots, Paynaments, Channels, Users, Posts, Greetings
 import logging
+from os import kill
 
 
 logging.basicConfig(level = logging.INFO)
@@ -14,6 +15,7 @@ logging.basicConfig(level = logging.INFO)
 class BotStates(StatesGroup):
     TYPE = State()
     TOKEN = State()
+    DELETE = State()
 
 def check_token(token):
     try:
@@ -23,7 +25,7 @@ def check_token(token):
         print(f"Token is invalid. Error: {str(e)}")
         return False
 
-bot = Bot(token = '6374236249:AAGV_LhSYGnWbJA4wEYIyt0-ZiwAZUj_k5s')
+bot = Bot(token = '6385303816:AAFUdMwXkVpnV9EjtQb_liLrQriB0U58T0g')
 storage = MemoryStorage()
 dp = Dispatcher(bot, storage = storage)
 bot_types = ["Постинг", "Привітальний"]
@@ -49,22 +51,26 @@ async def newbot_command_handler(message: types.Message, state: FSMContext):
     """, parse_mode = "html", reply_markup = main_kb) 
 
 
-@dp.message_handler(lambda m: m.text in ('Створити бота', '/addbot'))
+@dp.callback_query_handler(lambda cb: cb.data == 'back_to_menu', state = "*")
+async def back_to_menu(callback_query: types.CallbackQuery, state: FSMContext):
+    await state.finish()
+    await callback_query.message.answer('Скористайтеся меню:')
+
+@dp.message_handler(lambda m: m.text in ('Створити бота', '/addbot'), state = '*')
 async def get_bots(message: types.Message, state: FSMContext):
     await state.set_state(BotStates.TYPE)
-    
     kb = ReplyKeyboardMarkup([[KeyboardButton(type) for type in bot_types]], resize_keyboard = True)
     await message.answer(f'<b>Оберіть тип бота:</b>', parse_mode = "html", reply_markup = kb)
     
 
-@dp.message_handler(lambda m: m.text in ('Мої боти', '/mybots'))
+@dp.message_handler(lambda m: m.text in ('Мої боти', '/mybots'), state = '*')
 async def get_bots(message: types.Message):
     bots = await Bots.get("user_id", message.from_id, True)
     if not bots:
         return await message.answer(f'<b>У вас немає ботів.Створіть його, нажавши кнопку "Створити бота"</b>', parse_mode = "html")
     
-    bots = '\n'.join([(await Bot(_bot["token"]).get_me()).mention for _bot in bots])
-    await message.answer(f'<b>Список ваших ботів: \n\n{bots}</b>', parse_mode = "html")
+    bots_kb = InlineKeyboardMarkup(inline_keyboard = [[InlineKeyboardButton((await Bot(_bot["token"]).get_me()).mention, callback_data = f"edit_bot_{_bot['id']}")] for _bot in bots])
+    await message.answer(f'<b>Список ваших ботів:</b>', reply_markup = bots_kb, parse_mode = "html")
 
 
 @dp.message_handler(lambda m: m.text in bot_types, state = BotStates.TYPE)
@@ -96,20 +102,61 @@ async def process_newbot_token(message: types.Message, state: FSMContext):
     elif message.text in bots:
         return await message.reply('Такий токен вже зарєстровано.Спробуйте інший') 
 
-    subprocess.Popen(['python3', 'bot/main.py', new_bot_token, str(owner), type])
-
+    process = subprocess.Popen(['python3', 'bot/main.py', new_bot_token, str(owner), type])
     bot = Bot(token = new_bot_token)
     bot = await bot.get_me()
     await message.reply(f'{bot.mention} запущений.Використвуйте /start для початку роботи.Викорисутовуйте /bots, щоб відкрити список ботів', reply_markup = main_kb)
-    await Bots(bot.id, user_id = message.from_id, token = message.text, type = type)()
+    await Bots(bot.id, user_id = message.from_id, token = message.text, type = type, username = '@' + bot.username, p_id = process.pid)()
     await state.finish()  
 
+
+@dp.callback_query_handler(lambda cb: "edit_bot" in cb.data)
+async def edit_bot(callback_query: types.CallbackQuery):
+    bot_id = callback_query.data.split('_')[-1]
+    edit_kb = InlineKeyboardMarkup(inline_keyboard = [
+        [InlineKeyboardButton('Видалити', callback_data = f'delete_bot_{bot_id}')],
+        [InlineKeyboardButton('Повернтися в меню', callback_data = 'back_to_menu')]
+    ])
+    await callback_query.message.edit_text('Виберть дію:', reply_markup = edit_kb)
+
+@dp.callback_query_handler(lambda cb: "delete_bot" in cb.data)
+async def delete_bot(callback_query: types.CallbackQuery):
+    bot_id = callback_query.data.split('_')[-1]
+    bot = await Bots.get("id", bot_id)
+    kill(bot['p_id'], 9)
+
+    await Bots.delete(bot_id)
+    channels = await Channels.get("bot_id", bot_id, True)
+    if channels:
+        for channel in channels:
+            await Channels.delete(channel['id'])
+
+    posts = await Posts.get("bot_id", bot_id, True)
+    if posts:
+        for post in posts:
+            await Posts.delete(post['id'])
+
+    greetings = await Greetings.get("bot_id", bot.id, True)
+    if greetings:
+        for greet in greetings:
+            await Greetings.delete(greet['id'])
+
+    users = await Users.get('bot_id', bot.id, True)
+    if users:
+        for user in users:
+            await Users.delete(user['id'])
+    
+    bot = await Bot(token = bot['token']).get_me()
+    await callback_query.message.answer(f'{bot.mention} був успішно видалений')
+    await callback_query.message.delete()
 
 async def start_bots(_):
     await Bots.init_table({
         "id": "INT",
         "user_id": "INT",
+        "p_id": "INT",
         "token": "TEXT",
+        "username": "TEXT",
         "type": "TEXT",
         "subscription": "BOOLEAN",
         "subscription_to": "DATE"
@@ -175,14 +222,15 @@ async def start_bots(_):
                 token = _bot["token"]
                 owner = _bot["user_id"]
                 type = _bot["type"]
-                subprocess.Popen(['python3', 'bot/main.py', token, str(owner), type])
-
+                process = subprocess.Popen(['python3', 'bot/main.py', token, str(owner), type])
+                await Bots.update('id', _bot['id'], p_id = process.pid)
+                
                 bot_instance = Bot(token = token)
                 bot_mention = await bot_instance.get_me()
 
-                await bot.send_message(owner, f'Ваш <a href="https://t.me/{bot_mention.mention}">бот</a> знову працює!', parse_mode="html")
+                await bot.send_message(owner, f'Ваш <a href="https://t.me/{bot_mention.mention}">бот</a> знову працює!', parse_mode = types.ParseMode.HTML)
             except Exception as e:
-                await bot.send_message(owner, "Виникла помилка при запуску вашого бота")  
+                await bot.send_message(owner, "Виникла помилка при запуску вашого бота.Зверніться в підтримку")  
 
 
 async def stop_bots(_): 
@@ -197,6 +245,7 @@ async def stop_bots(_):
             await bot.send_message(owner, f'Ваш {bot_mention.mention} тимчасово припиняє роботу.', reply_markup = InlineKeyboardMarkup([[
                 InlineKeyboardButton("Звязатися з нами", url = "https://t.me/")
             ]]))
+
 
 if __name__ == '__main__':
     executor.start_polling(dp, on_startup = start_bots, on_shutdown = stop_bots)

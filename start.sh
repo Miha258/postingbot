@@ -21,4 +21,4 @@ else
 fi
 
 nohup python3 main.py &
-ps aux | grep python3
+echo ps aux | grep "$TARGET_PROCESS"

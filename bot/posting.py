@@ -1,6 +1,6 @@
 from create_bot import bot, get_channel
 import asyncio
-from aiogram.utils.exceptions import Unauthorized, FileIsTooBig
+from aiogram.utils.exceptions import Unauthorized, FileIsTooBig, MessageToEditNotFound
 from aiogram.utils.callback_data import CallbackData
 from aiogram import types, Dispatcher
 from aiogram.dispatcher import FSMContext
@@ -416,19 +416,22 @@ async def delay_post_handler(message: types.Message, state: FSMContext):
         
         if not date:
             return await message.answer("Ви не вибрали дату")
-        
-        if re.search(date_time_regex, date_string):
-            time = datetime.datetime.strptime(date_string, "%H:%M").time()
-            date = datetime.datetime.combine(date, time)
-            if date <= datetime.datetime.now():
-                return await message.answer(f"Недійсна дата.Спробуйте ще раз")  
-            
-            data["delay"] = date
-            data["delay_str"] = date_string
-            await state.set_state(EditStates.COMFIRM)
-            await message.answer("Виберіть дію:", reply_markup = confirm_deley_post_kb)
-        else:                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  
+        try:
+            if re.search(date_time_regex, date_string):
+                time = datetime.datetime.strptime(date_string, "%H:%M").time()
+                date = datetime.datetime.combine(date, time)
+                if date <= datetime.datetime.now():
+                    return await message.answer(f"Недійсна дата.Спробуйте ще раз")  
+                
+                data["delay"] = date
+                data["delay_str"] = date_string
+                await state.set_state(EditStates.COMFIRM)
+                await message.answer("Виберіть дію:", reply_markup = confirm_deley_post_kb)
+            else:                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  
+                await message.answer("Невірний формат дати.Спробуйте ще раз")
+        except ValueError:
             await message.answer("Невірний формат дати.Спробуйте ще раз")
+
 
 async def comfirm_delay_post(callback_query: types.CallbackQuery, state: FSMContext):
     try:
@@ -568,21 +571,19 @@ async def choose_post_for_edit(message: types.Message, state: FSMContext):
     await message.answer('Перешліть мені пост, який бажаєте відредагувати:', reply_markup = back_to_menu())
 
 
-async def edit_post(message: types.Message, state: FSMContext):
+async def edit_post(message: types.Message, state: FSMContext, post_id = None | int):
     global data
-    
-    target_message = message.forward_from_message_id
+    target_message = post_id or message.forward_from_message_id
     post = await Posts.get('id', target_message)
     if not post:
         return await message.answer('Пост не знайдено.Спробуйте інший:')
 
     data = post.to_dict()
-    
     if data:
         data['is_editing'] = True
         data['text'] = data['post_text']
         data['media'] = message.photo[-1] if message.photo else message.video
-        data['watermark'] = (await Channels.get('chat_id', message.forward_from_chat.id))['watermark']
+        data['watermark'] = (await Channels.get('chat_id', post["channel_id"]))['watermark']
         url_buttons = []
 
         for btn in data.get('url_buttons').split('\n'):
@@ -600,16 +601,20 @@ async def edit_post(message: types.Message, state: FSMContext):
                     url_buttons.append([InlineKeyboardButton(name, url)])
 
         data['url_buttons'] = url_buttons
-        kb = get_kb()
-        media = data['media']
-        if media:
-            if isinstance(media, types.PhotoSize):
-                await message.answer_photo(media.file_id, caption = data["text"], parse_mode = data.get("parse_mode"), reply_markup = kb)
-            elif isinstance(media, types.Video):
-                await message.answer_video(media.file_id, caption = data["text"], parse_mode = data.get("parse_mode"), reply_markup = kb)
-        else:
-            await message.answer(data["post_text"], parse_mode = data.get("parse_mode"), reply_markup = kb)
+        kb = get_kb()   
+
         await state.set_state(BotStates.EDITING_POST)
+        if post_id:
+            await message.edit_reply_markup(kb)
+        else:
+            media = data['media']
+            if media:
+                if isinstance(media, types.PhotoSize):
+                    await message.answer_photo(media.file_id, caption = data["text"], parse_mode = data.get("parse_mode"), reply_markup = kb)
+                elif isinstance(media, types.Video):
+                    await message.answer_video(media.file_id, caption = data["text"], parse_mode = data.get("parse_mode"), reply_markup = kb)
+            else:
+                await message.answer(data["post_text"], parse_mode = data.get("parse_mode"), reply_markup = kb)
     else:
         await message.answer('Цей пост не знайдений, спробуйте інший')
 
@@ -627,18 +632,22 @@ async def change_post_data(callback_query: types.CallbackQuery, state: FSMContex
     if watermark:
         text += "\n\n" + watermark 
     try:
-        if media:
-            media_file_id = media.file_id
-            input_media = None
-            if isinstance(media, types.PhotoSize):
-                input_media = types.InputMediaPhoto(media_file_id, text, parse_mode = data.get('parse_mode'))
-            elif isinstance(media, types.Video):
-                input_media = types.InputMediaVideo(media_file_id, text, parse_mode = data.get('parse_mode'))
+        is_posted = True
+        try:
+            if media:
+                media_file_id = media.file_id
+                input_media = None
+                if isinstance(media, types.PhotoSize):
+                    input_media = types.InputMediaPhoto(media_file_id, text, parse_mode = data.get('parse_mode'))
+                elif isinstance(media, types.Video):
+                    input_media = types.InputMediaVideo(media_file_id, text, parse_mode = data.get('parse_mode'))
+                
+                post = await bot.edit_message_media(chat_id = channel_id, message_id = post_id, media = input_media, reply_markup = user_kb)
+            else:
+                post = await bot.edit_message_text(chat_id = channel_id, message_id = post_id, text = text, reply_markup = user_kb, parse_mode = data.get('parse_mode'))
+        except MessageToEditNotFound:
+            is_posted = False
             
-            post = await bot.edit_message_media(chat_id = channel_id, message_id = post_id, media = input_media, reply_markup = user_kb)
-        else:
-            post = await bot.edit_message_text(chat_id = channel_id, message_id = post_id, text = text, reply_markup = user_kb, parse_mode = data.get('parse_mode'))
-
         if data.get("comments"):
             await asyncio.sleep(5)
             chat_url = (await bot.get_chat(post_id)).linked_chat_id
@@ -659,7 +668,10 @@ async def change_post_data(callback_query: types.CallbackQuery, state: FSMContex
             await media.get_url() if media else None,
             data.get('autodelete')
         )
-        await callback_query.message.answer(f'<b><a href="{post.url}">Пост</a> успішно відредаговано</b>', parse_mode = "html")
+        if is_posted:
+            await callback_query.message.answer(f'<b><a href="{post.url}">Пост</a> успішно відредаговано</b>', parse_mode = "html")
+        else:
+            await callback_query.message.answer('Пост відредаговано')
         await state.finish()
 
     except Unauthorized:
@@ -687,7 +699,7 @@ async def post_manager():
 
 def register_posting(dp: Dispatcher):
     asyncio.get_event_loop().create_task(post_manager())
-    dp.register_message_handler(process_new_post, lambda m: m.text == 'Постинг', IsAdminFilter(), IsChannel())
+    dp.register_message_handler(process_new_post, lambda m: m.text == 'Постинг', IsAdminFilter(), IsChannel(), state = "*")
     dp.register_callback_query_handler(set_preview, lambda cb: cb.data == 'set_preview', state = "*")
     dp.register_callback_query_handler(back_to_editing, lambda cb: "back_to_edit" == cb.data, state = "*")
     dp.register_message_handler(choose_post_for_edit, lambda m: m.text == 'Редагувати пост', IsAdminFilter(), state = '*')

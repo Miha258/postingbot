@@ -144,8 +144,9 @@ def get_calendar(month: int = 0):
 
 def get_edit_planed_post_kb(post_id: int):
     kb = InlineKeyboardMarkup(inline_keyboard = [
+        [InlineKeyboardButton('Редагувати', callback_data = f'change_planned_post_{post_id}')],
         [InlineKeyboardButton('Перенести', callback_data = f'change_planed_post_schedule_{post_id}')],
-        [InlineKeyboardButton('Видалити', callback_data = f'remove_planed_post_{post_id}')]
+        [InlineKeyboardButton('Видалити', callback_data = f'remove_planned_post_{post_id}')]
     ])
     return kb
 

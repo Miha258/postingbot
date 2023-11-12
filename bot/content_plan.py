@@ -5,10 +5,10 @@ from db.account import Posts
 from create_bot import get_channel
 from datetime import timedelta
 from states import ContentPlan
-from posting import process_new_post
+from posting import process_new_post, edit_post
 from keyboards import *
 from re import search
-from utils import fetch_media_bytes, IsAdminFilter
+from utils import fetch_media_bytes, IsAdminFilter, IsChannel
 
 async def get_plan_kb(date: datetime.datetime, full = False):
     posts = await Posts.get('channel_id', get_channel(), True)
@@ -20,7 +20,7 @@ async def get_plan_kb(date: datetime.datetime, full = False):
                 if delay.date() == date.date():
                     kb.add(InlineKeyboardButton(
                         f"📅 {post['delay']}",
-                        callback_data = f'edit_planed_post_{post["id"]}'
+                        callback_data = f'edit_planned_post_{post["id"]}'
                     )
             )
                     
@@ -139,7 +139,7 @@ async def set_calendar_state(callback_query: types.CallbackQuery, state: FSMCont
     await callback_query.message.edit_reply_markup(await get_plan_kb(datetime.datetime.now(), True))
     await state.set_state(ContentPlan.DATE)
 
-async def edit_planed_post(callback_query: types.CallbackQuery):
+async def edit_planned_post(callback_query: types.CallbackQuery):
     post_id = int(callback_query.data.split('_')[-1])
     post = await Posts.get('id', post_id)
     message = callback_query.message
@@ -149,9 +149,9 @@ async def edit_planed_post(callback_query: types.CallbackQuery):
         file = await fetch_media_bytes(media)
         is_video = types.InputMediaVideo(file).duration
         if is_video:
-            post = await message.answer_video(file, caption = post['post_text'], parse_mode = post["parse_mode"]) 
+            post = await message.answer_video(file, caption = post['post_text'], parse_mode = post["parse_mode"], reply_markup = get_edit_planed_post_kb(post_id)) 
         elif not is_video:
-            post = await message.answer_photo(file, caption = post['post_text'], parse_mode = post["parse_mode"])
+            post = await message.answer_photo(file, caption = post['post_text'], parse_mode = post["parse_mode"], reply_markup = get_edit_planed_post_kb(post_id))
     else:
         await message.answer(post['post_text'], reply_markup = get_edit_planed_post_kb(post_id))
     await message.delete()
@@ -162,11 +162,14 @@ async def handle_planed_post_editing(callback_query: types.CallbackQuery, state:
     data = data.split('_')[:-1]
     action = "_".join(data)
     match action:
+        case "change_planned_post":
+            message = callback_query.message
+            await edit_post(message, state, post_id)
         case "change_planed_post_schedule":
-            await callback_query.message.edit_text("Введіть час у форматі і виберіть дату: <b>00:00</b>", parse_mode = "html", reply_markup = get_calendar())
+            await callback_query.message.answer("Введіть час у форматі і виберіть дату: <b>00:00</b>", parse_mode = "html", reply_markup = get_calendar())
             await state.set_data({"post_id": post_id})
             await state.set_state(ContentPlan.DATE)
-        case "remove_planed_post":
+        case "remove_planned_post":
             await Posts.delete(post_id)
             await callback_query.answer('Пост видалено')
             await callback_query.message.answer('У цьому розділі ви можете переглядати та редагувати всі заплановані публікації у своїх проектах. Виберіть канал для перегляду контент-плану:', reply_markup = await get_plan_kb(datetime.datetime.now()))
@@ -196,13 +199,13 @@ async def edit_post_date(message: types.Message, state: FSMContext):
             await message.answer("Невірний формат дати.Спробуйте ще раз")
 
 def register_content_plan(dp: Dispatcher):
-    dp.register_message_handler(content_plan_list, lambda m: m.text == "Контент-план", IsAdminFilter())
+    dp.register_message_handler(content_plan_list, lambda m: m.text == "Контент-план", IsAdminFilter(), IsChannel(), state = '*')
     dp.register_callback_query_handler(plan_post, lambda cb: cb.data == "plan_post", state = ContentPlan.CHOOSE_DAY)
     dp.register_callback_query_handler(set_day, lambda cb: cb.data in ('next_day', 'prev_day'), state = ContentPlan.CHOOSE_DAY)
     dp.register_callback_query_handler(set_calendar_state, lambda cd: cd.data == "full_calendar", state = ContentPlan.CHOOSE_DAY)
     dp.register_callback_query_handler(set_full_calendar_day, lambda cd: "calendar_day" in cd.data, state = ContentPlan.DATE)
     dp.register_callback_query_handler(set_full_calendar_month, lambda cb: cb.data in ("prev_month", "next_month"), state = ContentPlan.DATE)
-    dp.register_callback_query_handler(edit_planed_post, lambda cd: "edit_planed_post" in cd.data, state = ContentPlan.CHOOSE_DAY)
-    dp.register_callback_query_handler(handle_planed_post_editing, lambda cb: "change_planed_post_schedule" in cb.data or "remove_planed_post" in cb.data, state = ContentPlan.CHOOSE_DAY)
+    dp.register_callback_query_handler(edit_planned_post, lambda cd: "edit_planned_post" in cd.data, state = ContentPlan.CHOOSE_DAY)
+    dp.register_callback_query_handler(handle_planed_post_editing, lambda cb: "change_planed_post_schedule" in cb.data or "remove_planned_post" in cb.data or "change_planned_post" in cb.data, state = ContentPlan.CHOOSE_DAY)
     dp.register_message_handler(edit_post_date, state = ContentPlan.DATE)
     dp.register_message_handler(choose_plan_post_time, state = ContentPlan.CHOOSE_DATE)
