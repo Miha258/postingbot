@@ -27,7 +27,7 @@ async def choose_tarif(message: types.Message):
     bot = await Bots.get("id", message.bot.id)
     if bot:
         if bot["subscription"]:
-            await message.answer(f"Ви уже оформили тариф до <b>{bot['subscription_to'].split(' ')[0]}</b>", parse_mode = "html")
+            await message.answer(f"Ви вже оформили тариф до <b>{bot['subscription_to'].split(' ')[0]}</b>", parse_mode = "html")
         else:
             await message.answer("Виберіть тариф", reply_markup = choice_tarif)
 

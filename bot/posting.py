@@ -571,9 +571,10 @@ async def choose_post_for_edit(message: types.Message, state: FSMContext):
     await message.answer('Перешліть мені пост, який бажаєте відредагувати:', reply_markup = back_to_menu())
 
 
-async def edit_post(message: types.Message, state: FSMContext, post_id = None | int):
+async def edit_post(message: types.Message, state: FSMContext, post_id: int = None):
     global data
     target_message = post_id or message.forward_from_message_id
+    print(post_id)
     post = await Posts.get('id', target_message)
     if not post:
         return await message.answer('Пост не знайдено.Спробуйте інший:')
