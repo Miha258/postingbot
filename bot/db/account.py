@@ -62,6 +62,9 @@ class Channels(Table):
 class Users(Table):
     table = "users"
 
+class Adds(Table):
+    table = "adds"
+
 class Posts(Table):
     table = "posts"
 

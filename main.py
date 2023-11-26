@@ -5,7 +5,7 @@ from aiogram.dispatcher.filters.state import State, StatesGroup
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, KeyboardButton
 from aiogram.dispatcher import FSMContext
 from aiogram import executor
-from bot.db.account import Bots, Paynaments, Channels, Users, Posts, Greetings
+from bot.db.account import Bots, Paynaments, Channels, Users, Posts, Greetings, Adds
 import logging
 from os import kill
 
@@ -194,7 +194,7 @@ async def start_bots(_):
         "autodelete": "INT",
         "delay": "INT",
         "buttons": "TEXT",
-        "image": "BLOB"
+        "image": "TEXT"
     })
 
     await Posts.init_table({
@@ -213,6 +213,15 @@ async def start_bots(_):
         "delay": "DATE",
         "media": "TEXT",
         "autodelete": "DATE"
+    })
+
+    await Adds.init_table({
+        "id": "INT",
+        "bot_id": "INT",
+        "adds_text": "TEXT",
+        "delay": "DATE",
+        "buttons": "TEXT",
+        "media": "TEXT"
     })
     
     user_bots = await Bots.all()

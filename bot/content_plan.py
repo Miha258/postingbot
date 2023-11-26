@@ -129,6 +129,7 @@ async def set_full_calendar_month(callback_query: types.CallbackQuery, state: FS
 
 
 async def content_plan_list(message: types.Message, state: FSMContext):
+    await state.finish()
     date = datetime.datetime.now()
     await message.answer('У цьому розділі ви можете переглядати та редагувати всі заплановані публікації у своїх проектах. Виберіть канал для перегляду контент-плану:',
     reply_markup = await get_plan_kb(date))

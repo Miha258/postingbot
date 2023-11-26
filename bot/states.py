@@ -17,6 +17,7 @@ class BotStates(StatesGroup):
 class BotAdds(StatesGroup):
     MEDIA = State()
     BTN = State()
+    DATE = State()
     CHECK = State()
 
 

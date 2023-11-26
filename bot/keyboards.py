@@ -150,6 +150,15 @@ def get_edit_planed_post_kb(post_id: int):
     ])
     return kb
 
+def get_adds_kb():
+    kb = InlineKeyboardMarkup(inline_keyboard = [
+        [   
+            InlineKeyboardButton('Розсилка', callback_data = f'create_add'),
+            InlineKeyboardButton('← Розклад', callback_data = f'adds_calendar')
+        ]
+    ])
+    return kb
+
 def get_autodelete_kb() -> InlineKeyboardMarkup:
     kb = InlineKeyboardMarkup()
     button_rows = [
@@ -163,6 +172,5 @@ def get_autodelete_kb() -> InlineKeyboardMarkup:
         for button in row:
             button_row.append(InlineKeyboardButton(f'{button}h', callback_data = f'set_autodelete_{button}'))
         buttons.append(button_row)
-    
     kb.inline_keyboard = buttons
     return kb

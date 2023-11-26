@@ -26,7 +26,8 @@ kb = InlineKeyboardMarkup(inline_keyboard = [
     [InlineKeyboardButton(name, callback_data = data)] for name, data in list(options.items())[1:]
 ])
 
-async def mode_selector(message: types.Message):
+async def mode_selector(message: types.Message, state: FSMContext):
+    await state.finish()
     channel = get_channel()
     if not channels.get(channel):
         channels[channel] = {"type": "off", "requests": [], "delay": None}

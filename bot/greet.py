@@ -17,7 +17,8 @@ options = {
     "🤖ChatGPT": "chatgpt",
     "💌 Повідомлення": "set_greet_text"
 }
-channels = {}
+back_to_custom_greet_menu_kb = lambda greet_id: InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton('Повернутися', callback_data = f"back_to_edit_greet_menue_{greet_id}")]])
+
 
 def get_greet_options_kb():
     channel = get_channel()
@@ -56,7 +57,7 @@ async def custom_greatings_kb():
     return kb
 
 
-def timeout_selector_kb():
+def timeout_selector_kb(greet_id):
     timeouts = [
         '0.5m', '1m', '2m',
         '3m', '5m', '10m',
@@ -65,6 +66,7 @@ def timeout_selector_kb():
     ]
 
     kb = InlineKeyboardMarkup(inline_keyboard = [[InlineKeyboardButton(timeout, callback_data = f'set_greet_timeout_{timeout.removesuffix("m")}') for timeout in timeouts]])
+    kb.add(InlineKeyboardButton('Повернутися', callback_data = f"back_to_edit_greet_menue_{greet_id}"))
     return kb 
 
 
@@ -75,7 +77,9 @@ async def edit_custom_greating_kb(greet_id: int):
     delay: int = greeting['delay']
 
     kb = InlineKeyboardMarkup(inline_keyboard = [
+        [InlineKeyboardButton('Змінити текст', callback_data = f'custom_greet_edit_text_{greet_id}')],
         [InlineKeyboardButton(f'Автовидалення: {autodelete}m' if autodelete else 'Автовидалення', callback_data = f'custom_greet_autodelete_{greet_id}')],
+        [InlineKeyboardButton('Редагувати медіа', callback_data = f'edit_custom_greet_media_{greet_id}')],
         [InlineKeyboardButton(f'Затримка: {delay}m' if delay else f'Затримка', callback_data = f'custom_greet_delay_{greet_id}')],
         [InlineKeyboardButton('Видалити кнопки', callback_data = f'remove_custom_greet_buttons_{greet_id}') if 
         buttons else InlineKeyboardButton("Додати кнопки", callback_data = f'add_custom_greet_buttons_{greet_id}') ],
@@ -93,7 +97,8 @@ async def edit_custom_greating_kb(greet_id: int):
     return kb
 
 
-async def greet_menu(message: types.Message):
+async def greet_menu(message: types.Message, state: FSMContext):
+    await state.finish()
     channel = get_channel()
     if not channels.get(channel):
         channels[channel] = {
@@ -127,9 +132,9 @@ async def option_handler(callback_query: types.CallbackQuery):
     if type == "set_greet_text":
         await callback_query.message.answer(
     """
-    💌 Повідомлення
+💌 Повідомлення
 
-    Налаштовуй повідомлення, які отримає користувач при взаємодії з підключеним каналом.
+Налаштовуй повідомлення, які отримає користувач при взаємодії з підключеним каналом.
     """, reply_markup = await custom_greatings_kb())
     else:
         await callback_query.message.edit_reply_markup(get_greet_options_kb())
@@ -231,18 +236,18 @@ async def check_capcha(message: types.Message, state: FSMContext):
     if reply:
         await message.answer(reply)
         await state.finish()
-    await send_custom_greet_to_user(channel, message.from_id)
+    await send_custom_greet_to_user(message.from_id)
 
 
-async def send_custom_greet_to_user(chat_id: int, user_id: int):
-    greets = await Greetings.get('channel_id', chat_id, True)
+async def send_custom_greet_to_user(user_id: int):
+    greets = await Greetings.get('bot_id', bot.id, True)
     if greets:
         for greet in greets:
             autodelete: int = greet['autodelete']
             delay: int = greet['delay']
             greet_text: int = greet['greet_text']
             buttons: str = greet['buttons']
-            image: bytes = greet['image']
+            media: bytes = greet['image']
             await asyncio.sleep(delay * 60)
             
             kb = InlineKeyboardMarkup()
@@ -252,8 +257,13 @@ async def send_custom_greet_to_user(chat_id: int, user_id: int):
                         name, url =  button.split('-')
                         kb.add(InlineKeyboardButton(name, url))
             
-            if image:
-                msg = await bot.send_photo(user_id, image, greet_text, reply_markup = kb, parse_mode = 'html') 
+            if media:
+                file = await fetch_media_bytes(media)
+                is_video = types.InputMediaVideo(file).duration
+                if is_video:
+                    msg = await bot.send_video(user_id, file, greet_text, reply_markup = kb, parse_mode = 'html') 
+                elif not is_video:
+                    msg = await bot.send_photo(user_id, file, greet_text, reply_markup = kb, parse_mode = 'html') 
             else:
                 msg = await bot.send_message(user_id, greet_text, reply_markup = kb, parse_mode = 'html')
             
@@ -264,14 +274,21 @@ async def send_custom_greet_to_user(chat_id: int, user_id: int):
 
 async def greeting_request_handler(request: types.ChatJoinRequest):
     channel: str = channels.get(str(request.chat.id))
+
     if channel:
         request_types = channel['types']
-        for type in request_types:
-            match type:
-                case "bot_checking":
-                    await bot_checking(request)
-                case "chatgpt":
-                    await chat_gpt(request)
+        if 'set_greet_text' in request_types and len(request_types) == 1:
+            await send_custom_greet_to_user(request.from_user.id)
+        else:
+            if request_types:
+                for type in request_types:
+                    match type:
+                        case "bot_checking":
+                            await bot_checking(request)
+                        case "chatgpt":
+                            await chat_gpt(request)
+    else:
+        await send_custom_greet_to_user(request.from_user.id)
                         
 
 async def add_custom_greet(callback_query: types.CallbackQuery, state: FSMContext):
@@ -304,17 +321,15 @@ async def procces_custom_greet(message: types.Message, state: FSMContext):
         media: types.PhotoSize | types.Video = data['media']
         media_data = None
         if media:
-            file = await media.get_url()
-            media_data = await fetch_media_bytes(file)
-    
-    await Greetings(message.message_id, bot_id = bot.id, greet_text = greet_text, channel_id = get_channel(), autodelete = 0, delay = 0, buttons = buttons, image = media_data)()
-    await message.answer(
-    """
-    💌 Повідомлення
+            media_data = await media.get_url()
+        await Greetings(message.message_id, bot_id = bot.id, greet_text = greet_text, channel_id = get_channel(), autodelete = 0, delay = 0, buttons = buttons, image = media_data)()
+        await message.answer(
+        """
+💌 Повідомлення
 
-    Налаштовуй повідомлення, які отримає користувач при взаємодії з підключеним каналом.
-    """, reply_markup = await custom_greatings_kb())
-    await state.finish()
+Налаштовуй повідомлення, які отримає користувач при взаємодії з підключеним каналом.
+        """, reply_markup = await custom_greatings_kb())
+        await state.finish()
 
 
 async def edit_button_greet_notify(callback_query: types.CallbackQuery):
@@ -324,58 +339,105 @@ async def edit_button_greet_notify(callback_query: types.CallbackQuery):
 async def edit_custom_greet(callback_query: types.CallbackQuery, state: FSMContext):
     data = callback_query.data
     greet_id = int(data.split('_')[-1])
-    greet = await Greetings.get('id', greet_id)
-    
-    await callback_query.message.answer(greet['greet_text'], reply_markup = await edit_custom_greating_kb(greet_id))
+    greet = (await Greetings.get('id', greet_id)).data
+    media = greet.get('image')
+    text = greet.get('greet_text')
+    if media:
+        file = await fetch_media_bytes(media)
+        is_video = types.InputMediaVideo(file).duration
+        if is_video:
+            await callback_query.message.answer_video(file, text, reply_markup = await edit_custom_greating_kb(greet_id), parse_mode = 'html') 
+        elif not is_video:
+            await callback_query.message.answer_photo(file, text, reply_markup = await edit_custom_greating_kb(greet_id), parse_mode = 'html') 
+    else:
+        await callback_query.message.answer(text, reply_markup = await edit_custom_greating_kb(greet_id))
     await state.set_state(CustomGreetSatates.GREET_EDITING)
-
 
 async def edit_custom_greet_handler(callback_query: types.CallbackQuery, state: FSMContext):
     data = callback_query.data
     greet_id = int(data.split('_')[-1])
+    message = callback_query.message
+    media = message.photo[-1] if message.photo else message.video
     await state.set_data({'greet_id': greet_id})
 
     data = data.split('_')[:-1]
     action = "_".join(data)
     
-    match action:
+    match action:   
+        case "custom_greet_edit_text":
+            await state.set_state(CustomGreetSatates.EDIT_TEXT)
+            if media:
+                await message.edit_caption("Введіть новий текст привітання:", reply_markup = back_to_custom_greet_menu_kb(greet_id))
+            else:
+                await message.edit_text("Введіть новий текст привітання:", reply_markup = back_to_custom_greet_menu_kb(greet_id))
         case "custom_greet_autodelete":
             await state.set_state(CustomGreetSatates.EDIT_AUTODELETE)
-            await callback_query.message.edit_text("Оберіть, через скільки ваше привітання буде видалено:", reply_markup = timeout_selector_kb())
+            if media:
+                await message.edit_caption("Оберіть, через скільки ваше привітання буде видалено:", reply_markup = timeout_selector_kb(greet_id))
+            else:
+                await message.edit_text("Оберіть, через скільки ваше привітання буде видалено:", reply_markup = timeout_selector_kb(greet_id))
         case "custom_greet_delay":
             await state.set_state(CustomGreetSatates.EDIT_DELAY)
-            await callback_query.message.edit_text("Оберіть затримку надсилання привітання:", reply_markup = timeout_selector_kb())
+            if media:
+                await message.edit_caption("Оберіть затримку надсилання привітання:", reply_markup = timeout_selector_kb(greet_id))
+            else:
+                await message.edit_text("Оберіть затримку надсилання привітання:", reply_markup = timeout_selector_kb(greet_id))
         case "remove_custom_greet_buttons":
             await remove_greet_buttons(callback_query, state)
         case "add_custom_greet_buttons":
-            await callback_query.message.delete()
-            await callback_query.message.answer("Введіть кнопку у форматі: \n<em>1. Кнопка - посилання</em>\n<em>2. Кнопка - посилання</em>\n<em>3. Кнопка - посилання</em>", parse_mode = "html")
+            await message.delete()
+            await message.answer("Введіть кнопку у форматі: \n<em>1. Кнопка - посилання</em>\n<em>2. Кнопка - посилання</em>\n<em>3. Кнопка - посилання</em>", reply_markup = back_to_custom_greet_menu_kb(greet_id), parse_mode = "html")
             await state.set_state(CustomGreetSatates.EDIT_BUTTONS)
         case 'delete_greet':
             await delete_greet(callback_query, state)
+        case "edit_custom_greet_media":
+            await message.answer("Введіть фото/відео:", reply_markup = back_to_custom_greet_menu_kb(greet_id))
+            await state.set_state(CustomGreetSatates.EDIT_MEDIA)
         case 'stop_editing_greet':
-            await callback_query.message.answer(
+            await message.answer(
             """
-            💌 Повідомлення
+💌 Повідомлення
 
-            Налаштовуй повідомлення, які отримає користувач при взаємодії з підключеним каналом.
+Налаштовуй повідомлення, які отримає користувач при взаємодії з підключеним каналом.
             """, reply_markup = await custom_greatings_kb())
             await state.finish()
+
+async def back_to_edit_greet_menue(callback_query: types.CallbackQuery, state: FSMContext):
+    data = callback_query.data
+    greet_id = int(data.split('_')[-1])
+    greet = (await Greetings.get('id', greet_id)).data
+    media = greet.get('image')
+    text = greet.get('greet_text')
+    if media:
+        await callback_query.message.edit_caption(text, reply_markup = await edit_custom_greating_kb(greet_id)) 
+    else:
+        await callback_query.message.answer(text, reply_markup = await edit_custom_greating_kb(greet_id))
+    await state.set_state(CustomGreetSatates.GREET_EDITING)
 
 async def edit_greet_autodelete(callback_query: types.CallbackQuery, state: FSMContext):
     autodelete = float(callback_query.data.split('_')[-1])
     greet_id = (await state.get_data())['greet_id']
     greet = await Greetings.update('id', greet_id, autodelete = autodelete)
-    
-    await callback_query.message.edit_text(greet['greet_text'], reply_markup = await edit_custom_greating_kb(greet_id))
+    message = callback_query.message
+    media = message.photo[-1] if message.photo else message.video
+
+    if media:
+        await message.edit_caption(greet['greet_text'], reply_markup = await edit_custom_greating_kb(greet_id))
+    else:
+        await message.edit_text(greet['greet_text'], reply_markup = await edit_custom_greating_kb(greet_id))
     await state.set_state(CustomGreetSatates.GREET_EDITING)
 
 async def edit_greet_delay(callback_query: types.CallbackQuery, state: FSMContext):
     delay = float(callback_query.data.split('_')[-1])
     greet_id = (await state.get_data())['greet_id']
     greet = await Greetings.update('id', greet_id, delay = delay)
-    
-    await callback_query.message.edit_text(greet['greet_text'], reply_markup = await edit_custom_greating_kb(greet_id))
+    message = callback_query.message
+    media = message.photo[-1] if message.photo else message.video
+
+    if media:
+        await message.edit_caption(greet['greet_text'], reply_markup = await edit_custom_greating_kb(greet_id))
+    else:
+        await message.edit_text(greet['greet_text'], reply_markup = await edit_custom_greating_kb(greet_id))
     await state.set_state(CustomGreetSatates.GREET_EDITING)
 
 async def edit_greet_buttons(message: types.Message, state: FSMContext):
@@ -386,7 +448,6 @@ async def edit_greet_buttons(message: types.Message, state: FSMContext):
             for btn in matches:
                 name, link = btn.split(' - ')
                 InlineKeyboardButton(name, link)
-                await message.edit_text(message.html_text)
                 buttons += (name + '-' + link + '\n')
     
         greet_id = (await state.get_data())['greet_id']
@@ -407,9 +468,31 @@ async def remove_greet_buttons(callback_query: types.CallbackQuery, state: FSMCo
 
 async def edit_greet_text(message: types.Message, state: FSMContext):
     greet_id = (await state.get_data())['greet_id']
-    await Greetings.update('id', greet_id, greet_text = message.html_text)
+    greet = await Greetings.update('id', greet_id, greet_text = message.html_text)
+    media = greet.data.get('image')
 
-    await message.edit_text(message.html_text)
+    if media:
+        file = await fetch_media_bytes(media)
+        is_video = types.InputMediaVideo(file).duration
+        if is_video:
+            await message.answer_video(file, message.html_text, reply_markup = await edit_custom_greating_kb(greet_id))
+        elif not is_video:
+            await message.answer_photo(file, message.html_text, reply_markup = await edit_custom_greating_kb(greet_id))     
+    else:
+        await message.answer(message.html_text, reply_markup = await edit_custom_greating_kb(greet_id))
+
+    await state.set_state(CustomGreetSatates.GREET_EDITING)
+
+
+async def edit_greet_media(message: types.Message, state: FSMContext):
+    greet_id = (await state.get_data())['greet_id']
+    media = message.photo[-1] if message.photo else message.video
+    greet = await Greetings.update('id', greet_id, image = await media.get_url())
+
+    if isinstance(media, types.PhotoSize):
+        await message.answer_photo(media.file_id, greet['greet_text'], reply_markup = await edit_custom_greating_kb(greet_id))
+    elif isinstance(media, types.Video):
+        await message.answer_video(media.file_id, caption = greet['greet_text'], reply_markup = await edit_custom_greating_kb(greet_id))
     await state.set_state(CustomGreetSatates.GREET_EDITING)
 
 
@@ -420,16 +503,17 @@ async def delete_greet(callback_query: types.CallbackQuery, state: FSMContext):
     await callback_query.message.delete()
     await callback_query.message.answer(
     """
-    💌 Повідомлення
+💌 Повідомлення
 
-    Налаштовуй повідомлення, які отримає користувач при взаємодії з підключеним каналом.
+Налаштовуй повідомлення, які отримає користувач при взаємодії з підключеним каналом.
     """, reply_markup = await custom_greatings_kb())
     await state.finish()
 
 
 def register_greet(dp: Dispatcher):
-    dp.register_message_handler(greet_menu, lambda m: m.text == 'Привітання', IsAdminFilter(), IsChannel())
+    dp.register_message_handler(greet_menu, lambda m: m.text == 'Привітання', IsAdminFilter(), IsChannel(), state = "*")
     dp.register_callback_query_handler(back_to_greet_menu, lambda cb: cb.data == 'back_to_greet_menu')
+    dp.register_callback_query_handler(back_to_edit_greet_menue, lambda cb: 'back_to_edit_greet_menue' in cb.data, state = "*")
     dp.register_callback_query_handler(add_custom_greet, lambda cb: cb.data == 'add_custom_greet')
     dp.register_callback_query_handler(edit_capcha, lambda cb: cb.data == 'edit_capcha')
     dp.register_callback_query_handler(change_bot_checking_status, lambda cb: cb.data == 'set_capcha_status')
@@ -438,7 +522,9 @@ def register_greet(dp: Dispatcher):
     dp.register_message_handler(procces_custom_greet, state = CustomGreetSatates.BUTTONS)
     dp.register_callback_query_handler(edit_custom_greet, lambda cb: "edit_custom_greet" in cb.data)
     dp.register_callback_query_handler(edit_custom_greet_handler, state = CustomGreetSatates.GREET_EDITING)
+    dp.register_message_handler(edit_greet_text, state = CustomGreetSatates.EDIT_TEXT)
     dp.register_message_handler(edit_greet_buttons, state = CustomGreetSatates.EDIT_BUTTONS)
+    dp.register_message_handler(edit_greet_media, state = CustomGreetSatates.EDIT_MEDIA, content_types = types.ContentTypes.PHOTO | types.ContentTypes.VIDEO) 
     dp.register_callback_query_handler(edit_button_greet_notify, lambda cb: cb.data == 'edit_button_greet_notify')
     dp.register_callback_query_handler(edit_greet_autodelete, state = CustomGreetSatates.EDIT_AUTODELETE)
     dp.register_callback_query_handler(edit_greet_delay, state = CustomGreetSatates.EDIT_DELAY)
