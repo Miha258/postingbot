@@ -7,38 +7,70 @@ from create_bot import bot
 import re
 from utils import IsAdminFilter
 
+data = {}
 
-async def ask_media(callback_query: types.CallbackQuery, state: FSMContext):
-    await callback_query.message.answer("Надішліть текст, фото/відео:", reply_markup = back_to_menu())
-    await state.set_state(BotAdds.MEDIA)
+def get_adds_kb(add_id: int):
+    kb = InlineKeyboardMarkup(inline_keyboard = [
+    [
+        InlineKeyboardButton("Змінити текст", callback_data = f"edit_adds_text_{add_id}"),
+        InlineKeyboardButton("Редагувати медіа", callback_data = f"edit_adds_media_{add_id}") if data.get("media") else InlineKeyboardButton("Прикріпити медіа", callback_data = "attach_media")
+    ],
+    [
+        InlineKeyboardButton("URL-кнопки", callback_data = f"edit_adds_buttons_{add_id}"),
+    ],
+    [
+        InlineKeyboardButton("Відкласти", callback_data = f"delay_adds_{add_id}"),
+        InlineKeyboardButton("Опублікувати", callback_data = f"create_adds_{add_id}")
+    ]
+    ])
+    kb.add(back_btn)
+
+    return kb
+
+async def process_new_add(message: types.Message, state: FSMContext):
+    await state.finish()
+    data.clear()
+    data["text"] = None
+    data["buttons"] = []
+    data["media"] = None
+    data["delay"] = None
+    data["datetime"] = (await state.get_data()).get('datetime')
+    await message.answer("Надішліть текст, картику або відео оголошення:")
+    await state.set_state(BotAdds.TEXT)
+
+async def adds_handler(callback_query: types.CallbackQuery, state: FSMContext):
+    data = callback_query.data
+    add_id = int(data.split('_')[-1])
+    add = (await Adds.get('id', add_id)).data
+    
+    data = data.split('_')[:-1]
+    action = "_".join(data)
+
+    match action:
+        case "edit_adds_text":
+            await callback_query.message.answer("Надішліть текст, фото/відео:", reply_markup = back_to_menu())
+            await state.set_state(BotAdds.MEDIA)
+        case "edit_adds_media":
+            pass
+        case "edit_adds_buttons":
+            pass
+        case "delay_adds":
+            pass
+        case "create_adds":
+            pass
+
+async def edit_adds_text(callback_query: types.CallbackQuery, state: FSMContext):
+    pass
+
+async def edit_adds_media(callback_query: types.CallbackQuery, state: FSMContext):
+    pass
 
 
-async def skip_btn(message: types.Message, state: FSMContext):
-    await check_adds(message, state)
-
-
-async def ask_for_btn(message: types.Message, state: FSMContext):
-    await state.update_data({'text': message.caption or message.text, 'media': message.photo[-1] if message.photo else message.video})
+async def edit_adds_buttons(message: types.Message, state: FSMContext):
+    await state.update_data({'text': message.caption or message.text})
     await state.set_state(BotAdds.BTN)
     await message.reply("Введіть кнопку у форматі: \n<em>1. Кнопка - посилання</em>\n<em>2. Кнопка - посилання</em>\n<em>3. Кнопка - посилання</em>", reply_markup = skip_menu(), parse_mode = "html")
 
-
-async def check_adds(message: types.Message, state: FSMContext):
-    regex_pattern = r'([^\-]+) - ([^\n]+)'
-
-    matches = re.findall(regex_pattern, message.text)
-    kb = None
-    if matches:
-        kb = types.InlineKeyboardMarkup(row_width = 1)
-
-        for name, link in matches:
-            button = types.InlineKeyboardButton(text = name, url = link)
-            kb.add(button)
-    
-    await state.update_data({'kb': kb})
-    await message.answer("Введіть час у форматі і виберіть дату: <b>00:00</b>", parse_mode = "html", reply_markup = get_calendar().add(back_to_edit.inline_keyboard[0][0]))     
-    
-    await state.set_state(BotAdds.DATE)
 
 async def choose_date_handler(callback_query: types.CallbackQuery, state: FSMContext):
     async with state.proxy() as data:
@@ -64,7 +96,7 @@ async def delay_adds_handler(message: types.Message, state: FSMContext):
                     return await message.answer(f"Недійсна дата.Спробуйте ще раз")  
                 
                 data["delay"] = date
-                await send_adds_to_users(message, state)
+                await save_add(message, state)
                 await state.set_state(BotAdds.CHECK)
             else:                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  
                 await message.answer("Невірний формат дати.Спробуйте ще раз")
@@ -72,15 +104,14 @@ async def delay_adds_handler(message: types.Message, state: FSMContext):
             await message.answer("Невірний формат дати.Спробуйте ще раз")
 
 
-async def send_adds_to_users(message: types.Message, state: FSMContext):
-    users = await Users.get('bot_id', bot.id, True)
+async def save_add(message: types.Message, state: FSMContext):
     async with state.proxy() as data:
         text = data.get("text")
         media = data.get("media")
         url_buttons = data.get("kb")
         delay = data.get('delay')
         buttons = "".join([ "".join([b.text + " - " + b.url + ("\n" if b == btn[-1] else " | ") for b in btn]) if isinstance(btn, list) else btn.text + " - " + btn.url + "\n" for btn in url_buttons.inline_keyboard])
-        
+            
         await Adds(message.message_id,
             bot_id = bot.id,
             adds_text = text,
@@ -88,26 +119,32 @@ async def send_adds_to_users(message: types.Message, state: FSMContext):
             buttons = buttons,
             media = media
         )()
-
-        if users and not delay:
-            counter = 0
-            for user in users:
-                try:
-                    channel = user['id']
-                    if media:
-                        if isinstance(media, types.PhotoSize):
-                            await bot.send_photo(channel, media.file_id, text, reply_markup = kb)
-                        elif isinstance(media, types.Video):
-                            await bot.send_video(channel, media.file_id, text, reply_markup = kb)
-                    else:
-                        await bot.send_message(channel, text, reply_markup = kb)
-                    counter += 1
-                except:
-                    pass
-            await message.answer(f"Розсилка відбулася успішно.Кількість надсилань: <b>{counter}</b>", reply_markup = main_menu(), parse_mode = "html")
-        else:
-            await message.answer(f"База даних бота пуста.Спробуйте пізніше", reply_markup = main_menu())
     await state.finish()
+
+async def send_add_to_user(add_id: int):
+    users = await Users.get('bot_id', bot.id, True)
+    if users and not delay:
+        counter = 0
+        add = (await Adds.get('id', add_id)).data
+        delay = add.get('delay')
+        media = add.get('media')
+        text = add.get('text')
+        for user in users:
+            try:
+                channel = user['id']
+                if media:
+                    if isinstance(media, types.PhotoSize):
+                        await bot.send_photo(channel, media.file_id, text, reply_markup = kb)
+                    elif isinstance(media, types.Video):
+                        await bot.send_video(channel, media.file_id, text, reply_markup = kb)
+                else:
+                    await bot.send_message(channel, text, reply_markup = kb)
+                counter += 1
+            except:
+                pass
+    #     await message.answer(f"Розсилка відбулася успішно.Кількість надсилань: <b>{counter}</b>", reply_markup = main_menu(), parse_mode = "html")
+    # else:
+    #     await message.answer(f"База даних бота пуста.Спробуйте пізніше", reply_markup = main_menu())
 
 async def planned_menue(message: types.Message, state: FSMContext):
     adds = await Adds.get("bot_id", bot.id, True)
@@ -151,10 +188,9 @@ async def planned_menue(message: types.Message, state: FSMContext):
 
 def register_adds(dp: Dispatcher):
     dp.register_message_handler(planned_menue, lambda m: m.text == "Розсилка", IsAdminFilter(), state = "*")
-    dp.register_callback_query_handler(ask_media, lambda cb: cb.data == "create_add", IsAdminFilter(), state = "*")
-    dp.register_message_handler(skip_btn, lambda m: m.text == "Пропустити", state = BotAdds.BTN)
-    dp.register_message_handler(ask_for_btn, state = BotAdds.MEDIA, content_types = types.ContentTypes.PHOTO | types.ContentTypes.VIDEO | types.ContentTypes.TEXT)
+    dp.register_message_handler(edit_adds_text, state = BotAdds.BTN, content_types = types.ContentTypes.TEXT)
+    dp.register_callback_query_handler(edit_adds_media, state = BotAdds.MEDIA, content_types = types.ContentTypes.PHOTO | types.ContentTypes.VIDEO)
+    dp.register_message_handler(edit_adds_buttons, state = BotAdds.BTN)
     dp.register_callback_query_handler(choose_date_handler, state = BotAdds.DATE)
     dp.register_message_handler(delay_adds_handler, state = BotAdds.DATE)
-    dp.register_message_handler(check_adds, state = BotAdds.BTN, content_types = types.ContentTypes.TEXT)
-    dp.register_message_handler(send_adds_to_users, lambda m: m.text == "Опублікувати", state = BotAdds.CHECK)
+    # dp.register_message_handler(send_adds_to_users, lambda m: m.text == "Опублікувати", state = BotAdds.CHECK)
