@@ -113,11 +113,12 @@ async def process_newbot_token(message: types.Message, state: FSMContext):
 @dp.callback_query_handler(lambda cb: "edit_bot" in cb.data)
 async def edit_bot(callback_query: types.CallbackQuery):
     bot_id = callback_query.data.split('_')[-1]
+    _bot = await Bots.get('id', bot_id)
     edit_kb = InlineKeyboardMarkup(inline_keyboard = [
         [InlineKeyboardButton('Видалити', callback_data = f'delete_bot_{bot_id}')],
-        [InlineKeyboardButton('Повернтися в меню', callback_data = 'back_to_menu')]
+        [InlineKeyboardButton('Повернутися в меню', callback_data = 'back_to_menu')]
     ])
-    await callback_query.message.edit_text('Виберть дію:', reply_markup = edit_kb)
+    await callback_query.message.edit_text(f'Виберть дію для {_bot["username"]}:', reply_markup = edit_kb)
 
 @dp.callback_query_handler(lambda cb: "delete_bot" in cb.data)
 async def delete_bot(callback_query: types.CallbackQuery):
@@ -212,7 +213,8 @@ async def start_bots(_):
         "watermark": "TEXT",
         "delay": "DATE",
         "media": "TEXT",
-        "autodelete": "DATE"
+        "autodelete": "DATE",
+        "is_published": "BOOLEAN"
     })
 
     await Adds.init_table({
@@ -221,7 +223,8 @@ async def start_bots(_):
         "adds_text": "TEXT",
         "delay": "DATE",
         "buttons": "TEXT",
-        "media": "TEXT"
+        "media": "TEXT",
+        "is_published": "BOOLEAN"
     })
     
     user_bots = await Bots.all()

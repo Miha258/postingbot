@@ -231,7 +231,7 @@ async def planned_menue(message: types.Message, state: FSMContext):
         today = list(filter(lambda add: add.data.get('delay') and datetime.datetime.strptime(add.data.get('delay'), date_format).date() == prev_day, adds))
         yesterday = list(filter(lambda add: add.data.get('delay') and datetime.datetime.strptime(add.data.get('delay'), date_format).date() == prev_day, adds))
         tomorrow = list(filter(lambda add: add.data.get('delay') and datetime.datetime.strptime(add.data.get('delay'), date_format).date() == next_day, adds))
-        date_format = "%H:%M:%S"
+        date_format = "%H:%M"
         separator = '\n'
         planned_menue_message = f"""
 📅 Події
