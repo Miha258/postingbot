@@ -119,7 +119,7 @@ async def option_handler(callback_query: types.CallbackQuery):
         _channel = await Channels.get("chat_id", channel)
         capcha = _channel['capcha']
         if capcha is None:
-            capcha = (await Channels.update("id", _channel['id'], capcha = "Пройдіть перевірку на бота - Відмовитися | Ви відмовилися від перевірки , Підтвердити | Перевірку пройдено"))['capcha']
+            capcha = (await Channels.update("id", _channel['id'], capcha = "Пройдіть перевірку на бота - Відмовитися / Ви відмовилися від перевірки , Підтвердити / Перевірку пройдено"))['capcha']
         capcha_text, capcha_btns = capcha.split(' - ')
         return await callback_query.message.edit_text(f'<b>Текст капчі:</b> \n\n{capcha_text if capcha_text else "Немає"}', reply_markup = edit_capcha_kb(type in channels[channel]['types'], capcha_btns))
 
@@ -152,7 +152,7 @@ async def change_bot_checking_status(callback_query: types.CallbackQuery):
     await callback_query.message.edit_reply_markup(edit_capcha_kb(type in channels[channel]['types'], capcha_btns))
 
 async def edit_capcha(callback_query: types.CallbackQuery, state: FSMContext):
-    await callback_query.message.answer('Введіть текст у форматі \n\n <em>Текст капчі - кнопка1 | відповідь1 , кнопка2 | відповідть2</em>')
+    await callback_query.message.answer('Введіть текст у форматі \n\n <em>Текст капчі - кнопка1 / відповідь1 , кнопка2 / відповідть2</em>')
     await state.set_state(BotStates.EDITING_CAPCHA)
 
 
@@ -160,12 +160,12 @@ async def update_bot_checking_text(message: types.Message, state: FSMContext):
     try:
         capcha_text, capcha_btns = message.text.split(' - ')
         if ' , ' not in message.text:
-            reply, answer = capcha_btns.split(' | ')
+            reply, answer = capcha_btns.split(' / ')
         else:
             capcha_data = capcha_btns.split(' , ')
             capcha_answers = {}
             for data in capcha_data:
-                reply, answer = data.split(' | ')
+                reply, answer = data.split(' / ')
     except:
         await message.answer('Невірний формат капчі.Cпробуйте ще раз:')
     else:
@@ -194,7 +194,7 @@ async def bot_checking(request: types.ChatJoinRequest):
     if capcha_btns:
         capcha_data = capcha_btns.split(' , ')
         for data in capcha_data:
-            reply = data.split(' | ')[0]
+            reply = data.split(' / ')[0]
             btns.append(KeyboardButton(reply))
         
     await bot.send_message(request.user_chat_id, capcha_text, reply_markup = ReplyKeyboardMarkup(keyboard = [btns], resize_keyboard = True))
@@ -224,12 +224,12 @@ async def check_capcha(message: types.Message, state: FSMContext):
     capcha_btns = capcha.split(' - ')[1]
     capcha_answers = {}
     if ' , ' not in capcha_btns:
-        reply, answer = capcha_btns.split(' | ')
+        reply, answer = capcha_btns.split(' / ')
         capcha_answers[reply] = answer
     else:
         capcha_data = capcha_btns.split(' , ')
         for data in capcha_data:
-            reply, answer = data.split(' | ')
+            reply, answer = data.split(' / ')
             capcha_answers[reply] = answer
     
     reply = capcha_answers.get(message.text)

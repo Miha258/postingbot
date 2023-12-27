@@ -65,10 +65,31 @@ class Users(Table):
 class Adds(Table):
     table = "adds"
 
+    @classmethod
+    async def save_add(
+        cls,
+        id: int, 
+        bot_id: int, 
+        adds_text: str, 
+        delay: datetime = None, 
+        buttons: str = None,
+        media: str = None,
+        is_publsihed: bool = None
+    ):
+        url_buttons = "".join([ "".join([b.text + " - " + b.url + ("\n" if b == btn[-1] else " / ") for b in btn]) if isinstance(btn, list) else btn.text + " - " + btn.url + "\n" for btn in buttons]) if buttons else None
+        await cls(
+            id,
+            bot_id = bot_id,
+            adds_text = adds_text,
+            delay = delay,
+            buttons = url_buttons,
+            media = media,
+            is_publsihed = is_publsihed
+        )()
+
 class Posts(Table):
     table = "posts"
-
-
+    
     @classmethod
     async def save_post(
         cls,
@@ -86,9 +107,10 @@ class Posts(Table):
         notify: bool = None,
         delay: datetime = None,
         media: str = None,
-        autodelete: datetime = None
+        autodelete: datetime = None,
+        is_publsihed: bool = None
     ):
-        url_buttons = "".join([ "".join([b.text + " - " + b.url + ("\n" if b == btn[-1] else " | ") for b in btn]) if isinstance(btn, list) else btn.text + " - " + btn.url + "\n" for btn in url_buttons])
+        url_buttons = "".join([ "".join([b.text + " - " + b.url + ("\n" if b == btn[-1] else " / ") for b in btn]) if isinstance(btn, list) else btn.text + " - " + btn.url + "\n" for btn in url_buttons])
         await cls(id, 
             bot_id = bot_id, 
             channel_id = channel_id,
@@ -103,7 +125,8 @@ class Posts(Table):
             notify = notify,
             delay = delay,
             media = media,
-            autodelete = autodelete 
+            autodelete = autodelete,
+            is_publsihed = is_publsihed
         )()
     @classmethod
     async def edit_post(
@@ -121,7 +144,7 @@ class Posts(Table):
         media: str = None,
         autodelete: datetime = None
     ):
-        url_buttons = "".join([ "".join([b.text + " - " + b.url + ("\n" if b == btn[-1] else " | ") for b in btn]) if isinstance(btn, list) else btn.text + " - " + btn.url + "\n" for btn in url_buttons])
+        url_buttons = "".join([ "".join([b.text + " - " + b.url + ("\n" if b == btn[-1] else " / ") for b in btn]) if isinstance(btn, list) else btn.text + " - " + btn.url + "\n" for btn in url_buttons])
         await cls.update(
             "id",
             id,

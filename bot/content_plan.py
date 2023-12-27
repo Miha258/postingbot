@@ -1,6 +1,5 @@
 from aiogram import types, Dispatcher
 from aiogram.dispatcher import FSMContext
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from db.account import Posts
 from create_bot import get_channel
 from datetime import timedelta
@@ -10,64 +9,6 @@ from keyboards import *
 from re import search
 from utils import fetch_media_bytes, IsAdminFilter, IsChannel
 
-async def get_plan_kb(date: datetime.datetime, full = False):
-    posts = await Posts.get('channel_id', get_channel(), True)
-    kb = InlineKeyboardMarkup()
-    if posts:
-        for post in posts:
-            if post['delay']:
-                delay = datetime.datetime.strptime(post['delay'], "%Y-%m-%d %H:%M:%S")
-                if delay.date() == date.date():
-                    kb.add(InlineKeyboardButton(
-                        f"📅 {post['delay']}",
-                        callback_data = f'edit_planned_post_{post["id"]}'
-                    )
-            )
-                    
-    if full:
-        return get_calendar()  
-        
-    date_fromat = "%Y-%m-%d"
-    plus_day = timedelta(days = 1)
-
-    prev_day = datetime.datetime.strftime(date - plus_day, date_fromat)
-    curr_day = datetime.datetime.strftime(date, date_fromat)
-    next_day = datetime.datetime.strftime(date + plus_day, date_fromat)
-    
-    day_buttons = []
-    if (date - plus_day).date() >= datetime.datetime.now().date():
-        day_buttons.append(
-            InlineKeyboardButton(
-                f"← {prev_day}",
-                callback_data = f'prev_day'
-            )
-        )
-    day_buttons.append(
-        InlineKeyboardButton(
-            f"{curr_day}",
-            callback_data = f'_'
-        )
-    )
-    day_buttons.append(
-        InlineKeyboardButton(
-            f"{next_day} →",
-            callback_data = f'next_day'
-        )
-    )
-    kb.inline_keyboard.append(day_buttons)
-    kb.add(
-        InlineKeyboardButton(
-            f"Розгорнути календар",
-            callback_data = f'full_calendar'
-        )
-    )
-    kb.add(
-        InlineKeyboardButton(
-            f"Запланувати пост",
-            callback_data = f'plan_post'
-        )
-    )
-    return kb
 
 async def plan_post(callback_query: types.CallbackQuery, state: FSMContext):
     async with state.proxy() as data:
@@ -105,7 +46,7 @@ async def set_day(callback_query: types.CallbackQuery, state: FSMContext):
                 data['date_offset'] = data['date_offset'] + 1
         date = datetime.datetime.now() + timedelta(data['date_offset'])
         await callback_query.message.edit_reply_markup(
-            await get_plan_kb(date)
+            await get_plan_kb(await Posts.get('channel_id', get_channel(), True), date)
         )
 
 
@@ -117,7 +58,7 @@ async def set_full_calendar_day(callback_query: types.CallbackQuery, state: FSMC
         if data.get('post_id'):
             await callback_query.answer(f'Ви вибрали: {date.strftime("%Y-%m-%d")}')
         else:
-            await callback_query.message.edit_reply_markup(await get_plan_kb(date))
+            await callback_query.message.edit_reply_markup(await Posts.get('channel_id', get_channel(), True), await get_plan_kb(date))
             await state.set_state(ContentPlan.CHOOSE_DAY)
 
 async def set_full_calendar_month(callback_query: types.CallbackQuery, state: FSMContext):
@@ -132,12 +73,12 @@ async def content_plan_list(message: types.Message, state: FSMContext):
     await state.finish()
     date = datetime.datetime.now()
     await message.answer('У цьому розділі ви можете переглядати та редагувати всі заплановані публікації у своїх проектах. Виберіть канал для перегляду контент-плану:',
-    reply_markup = await get_plan_kb(date))
+    reply_markup = await get_plan_kb(await Posts.get('channel_id', get_channel(), True), date))
     await state.set_data({'date_offset': 0})
     await state.set_state(ContentPlan.CHOOSE_DAY)
 
 async def set_calendar_state(callback_query: types.CallbackQuery, state: FSMContext):
-    await callback_query.message.edit_reply_markup(await get_plan_kb(datetime.datetime.now(), True))
+    await callback_query.message.edit_reply_markup(await Posts.get('channel_id', get_channel(), True), await get_plan_kb(datetime.datetime.now(), True))
     await state.set_state(ContentPlan.DATE)
 
 async def edit_planned_post(callback_query: types.CallbackQuery):
@@ -173,7 +114,7 @@ async def handle_planed_post_editing(callback_query: types.CallbackQuery, state:
         case "remove_planned_post":
             await Posts.delete(post_id)
             await callback_query.answer('Пост видалено')
-            await callback_query.message.answer('У цьому розділі ви можете переглядати та редагувати всі заплановані публікації у своїх проектах. Виберіть канал для перегляду контент-плану:', reply_markup = await get_plan_kb(datetime.datetime.now()))
+            await callback_query.message.answer('У цьому розділі ви можете переглядати та редагувати всі заплановані публікації у своїх проектах. Виберіть канал для перегляду контент-плану:', reply_markup = await get_plan_kb(await Posts.get('channel_id', get_channel(), True), datetime.datetime.now()))
             await callback_query.message.delete()
 
 async def edit_post_date(message: types.Message, state: FSMContext):
@@ -194,7 +135,7 @@ async def edit_post_date(message: types.Message, state: FSMContext):
             
             data["delay"] = date
             await Posts.update("id", post_id, delay = date)
-            await message.answer('У цьому розділі ви можете переглядати та редагувати всі заплановані публікації у своїх проектах. Виберіть канал для перегляду контент-плану:', reply_markup = await get_plan_kb(date))
+            await message.answer('У цьому розділі ви можете переглядати та редагувати всі заплановані публікації у своїх проектах. Виберіть канал для перегляду контент-плану:', reply_markup = await get_plan_kb(await Posts.get('channel_id', get_channel(), True), date))
             await state.set_state(ContentPlan.CHOOSE_DAY)
         else:
             await message.answer("Невірний формат дати.Спробуйте ще раз")

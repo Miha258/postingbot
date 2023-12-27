@@ -1,6 +1,7 @@
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardButton, InlineKeyboardMarkup
-from create_bot import bot_type
+from create_bot import bot_type, get_channel
 import datetime, calendar
+from db.account import Posts
 
 back_btn = InlineKeyboardButton('Повернутися в меню', callback_data = "back_to_menu")
 back_to_edit = InlineKeyboardMarkup(inline_keyboard = [
@@ -72,7 +73,7 @@ def edit_capcha_kb(status = False, capcha_buttons: str = None):
         capcha_answers = {}
         btns = []
         for data in capcha_data:
-            reply, answer = data.split('|')
+            reply, answer = data.split('/')
             capcha_answers[reply] = answer
             btns.append(InlineKeyboardButton(reply, callback_data = '_'))
         inline_markup.inline_keyboard.insert(0, btns)
@@ -101,17 +102,16 @@ def get_user_kb(data: dict):
             row_btns = 0
             for i, btn in enumerate(url_buttons.split('\n')):
                 if btn:
-                    if ' | ' not in btn:
+                    if ' / ' not in btn:
                         name, url = btn.split(' - ')
                         user_kb.inline_keyboard.insert(i + 1, [InlineKeyboardButton(name, url)])
-                    elif ' | ' in btn:
+                    elif ' / ' in btn:
                         btns = []
-                        for b in btn.split(' | '):
+                        for b in btn.split(' / '):
                             name, url = b.split(' - ')
                             btns.append(InlineKeyboardButton(name, url))
                         user_kb.inline_keyboard.insert(row_btns, btns)
-                    
-
+    
         if row_btns:
             user_kb.inline_keyboard.insert(0, row_btns)
     user_kb = user_kb if user_kb.inline_keyboard else None
@@ -173,4 +173,62 @@ def get_autodelete_kb() -> InlineKeyboardMarkup:
             button_row.append(InlineKeyboardButton(f'{button}h', callback_data = f'set_autodelete_{button}'))
         buttons.append(button_row)
     kb.inline_keyboard = buttons
+    return kb
+
+async def get_plan_kb(data, date: datetime.datetime, full = False):
+    kb = InlineKeyboardMarkup()
+    if data:
+        for record in data:
+            if record['delay']:
+                delay = datetime.datetime.strptime(record['delay'], "%Y-%m-%d %H:%M:%S")
+                if delay.date() == date.date():
+                    kb.add(InlineKeyboardButton(
+                        f"📅 {record['delay']}",
+                        callback_data = f'edit_planned_post_{record["id"]}'
+                    )
+            )
+                    
+    if full:
+        return get_calendar()  
+        
+    date_fromat = "%Y-%m-%d"
+    plus_day = datetime.timedelta(days = 1)
+
+    prev_day = datetime.datetime.strftime(date - plus_day, date_fromat)
+    curr_day = datetime.datetime.strftime(date, date_fromat)
+    next_day = datetime.datetime.strftime(date + plus_day, date_fromat)
+    
+    day_buttons = []
+    if (date - plus_day).date() >= datetime.datetime.now().date():
+        day_buttons.append(
+            InlineKeyboardButton(
+                f"← {prev_day}",
+                callback_data = f'prev_day'
+            )
+        )
+    day_buttons.append(
+        InlineKeyboardButton(
+            f"{curr_day}",
+            callback_data = f'_'
+        )
+    )
+    day_buttons.append(
+        InlineKeyboardButton(
+            f"{next_day} →",
+            callback_data = f'next_day'
+        )
+    )
+    kb.inline_keyboard.append(day_buttons)
+    kb.add(
+        InlineKeyboardButton(
+            f"Розгорнути календар",
+            callback_data = f'full_calendar'
+        )
+    )
+    kb.add(
+        InlineKeyboardButton(
+            f"Запланувати пост",
+            callback_data = f'plan_post'
+        )
+    )
     return kb

@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 from keyboards import *
 
 tarifs = {
-    6.99: "1 місяць 6.99$.",
+    5.99: "1 місяць 5.99$.",
     8.99: "3 місяця 8.99$.",
     12.99: "6 місяців 12.99$.",
     18.99: "1 рік 18.99$."
@@ -67,7 +67,7 @@ async def check_invoice(callback_query: types.CallbackQuery):
                 paid_at = paynament.get('paid_at')
 
                 await Paynaments(invoice_id, user_id = callback_query.from_user.id, amount = amount, currency = currency, created_at = created_at, paid_at = paid_at)()
-                await Bots.update("id", callback_query.message.from_id, subscription = True, subscription_to = datetime.now() + timedelta(days = 31 * int(tarif[0])))
+                await Bots.update("id", callback_query.message.from_id, subscription = True, subscription_to = datetime.datetime.now() + timedelta(days = 31 * int(tarif[0])))
                 await message.edit_text(f"Оплату <b>підтверджено</b>.Вітаю з придбанням тарифу: <b>{tarif}</b>", parse_mode = "html")
             else:
                 await callback_query.answer("Оплату не підтверджено.Спробуйте ще раз або зверніться в підтримку", show_alert = True)

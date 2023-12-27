@@ -15,6 +15,7 @@ class BotStates(StatesGroup):
     CHANGE_POST = State()
 
 class BotAdds(StatesGroup):
+    EDITING = State()
     TEXT = State()
     MEDIA = State()
     BTN = State()
