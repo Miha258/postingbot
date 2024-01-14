@@ -4,7 +4,7 @@ from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, KeyboardBu
 from aiogram.dispatcher import FSMContext
 from states import BotStates, CustomGreetSatates
 from utils import *
-from create_bot import bot, get_channel , storage
+from create_bot import bot, get_channel, storage
 import re
 import asyncio
 from db.account import Bots, Users, Greetings, Channels
@@ -17,8 +17,8 @@ options = {
     "🤖ChatGPT": "chatgpt",
     "💌 Повідомлення": "set_greet_text"
 }
-back_to_custom_greet_menu_kb = lambda greet_id: InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton('Повернутися', callback_data = f"back_to_edit_greet_menue_{greet_id}")]])
-
+back_to_custom_greet_menu_kb = lambda greet_id: InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton('Повернутися', callback_data = f"back_to_edit_greet_menu_{greet_id}")]])
+back_to_custom_capcha_menu_kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton('Повернутися', callback_data = f"back_to_custom_capcha_menu")]])
 
 def get_greet_options_kb():
     channel = get_channel()
@@ -66,7 +66,7 @@ def timeout_selector_kb(greet_id):
     ]
 
     kb = InlineKeyboardMarkup(inline_keyboard = [[InlineKeyboardButton(timeout, callback_data = f'set_greet_timeout_{timeout.removesuffix("m")}') for timeout in timeouts]])
-    kb.add(InlineKeyboardButton('Повернутися', callback_data = f"back_to_edit_greet_menue_{greet_id}"))
+    kb.add(InlineKeyboardButton('Повернутися', callback_data = f"back_to_edit_greet_menu_{greet_id}"))
     return kb 
 
 
@@ -119,7 +119,7 @@ async def option_handler(callback_query: types.CallbackQuery):
         _channel = await Channels.get("chat_id", channel)
         capcha = _channel['capcha']
         if capcha is None:
-            capcha = (await Channels.update("id", _channel['id'], capcha = "Пройдіть перевірку на бота - Відмовитися / Ви відмовилися від перевірки , Підтвердити / Перевірку пройдено"))['capcha']
+            capcha = (await Channels.update("id", _channel['id'], capcha = "Пройдіть перевірку на бота - Відмовитися | Ви відмовилися від перевірки , Підтвердити | Перевірку пройдено"))['capcha']
         capcha_text, capcha_btns = capcha.split(' - ')
         return await callback_query.message.edit_text(f'<b>Текст капчі:</b> \n\n{capcha_text if capcha_text else "Немає"}', reply_markup = edit_capcha_kb(type in channels[channel]['types'], capcha_btns))
 
@@ -140,7 +140,7 @@ async def option_handler(callback_query: types.CallbackQuery):
         await callback_query.message.edit_reply_markup(get_greet_options_kb())
 
 
-async def change_bot_checking_status(callback_query: types.CallbackQuery):
+async def change_bot_checking_status(callback_query: types.CallbackQuery, state: FSMContext):
     channel = get_channel()
     type = "bot_checking"
     if type in channels[channel]['types']:
@@ -149,10 +149,17 @@ async def change_bot_checking_status(callback_query: types.CallbackQuery):
         channels[channel]['types'].append(type)
     capcha = (await Channels.get("chat_id", channel))['capcha']
     capcha_btns = capcha.split(' - ')[1]
-    await callback_query.message.edit_reply_markup(edit_capcha_kb(type in channels[channel]['types'], capcha_btns))
+    if callback_query.data == "set_capcha_status":
+        await callback_query.message.edit_reply_markup(edit_capcha_kb(type in channels[channel]['types'], capcha_btns))
+    elif callback_query.data == "back_to_custom_capcha_menu":
+        _channel = await Channels.get("chat_id", channel)
+        capcha = _channel['capcha']
+        capcha_text, capcha_btns = capcha.split(' - ')
+        await callback_query.message.edit_text(f'<b>Текст капчі:</b> \n\n{capcha_text if capcha_text else "Немає"}', reply_markup = edit_capcha_kb(type in channels[channel]['types'], capcha_btns))
+        await state.finish()
 
-async def edit_capcha(callback_query: types.CallbackQuery, state: FSMContext):
-    await callback_query.message.answer('Введіть текст у форматі \n\n <em>Текст капчі - кнопка1 / відповідь1 , кнопка2 / відповідть2</em>')
+async def edit_capcha(callback_query: types.CallbackQuery, state: FSMContext): 
+    await callback_query.message.answer('Введіть текст у форматі \n\n <strong>Текст капчі - кнопка1 | відповідь1 , кнопка2 | відповідть2</strong>', reply_markup = back_to_custom_capcha_menu_kb)
     await state.set_state(BotStates.EDITING_CAPCHA)
 
 
@@ -160,12 +167,12 @@ async def update_bot_checking_text(message: types.Message, state: FSMContext):
     try:
         capcha_text, capcha_btns = message.text.split(' - ')
         if ' , ' not in message.text:
-            reply, answer = capcha_btns.split(' / ')
+            reply, answer = capcha_btns.split(' | ')
         else:
             capcha_data = capcha_btns.split(' , ')
             capcha_answers = {}
             for data in capcha_data:
-                reply, answer = data.split(' / ')
+                reply, answer = data.split(' | ')
     except:
         await message.answer('Невірний формат капчі.Cпробуйте ще раз:')
     else:
@@ -194,7 +201,7 @@ async def bot_checking(request: types.ChatJoinRequest):
     if capcha_btns:
         capcha_data = capcha_btns.split(' , ')
         for data in capcha_data:
-            reply = data.split(' / ')[0]
+            reply = data.split(' | ')[0]
             btns.append(KeyboardButton(reply))
         
     await bot.send_message(request.user_chat_id, capcha_text, reply_markup = ReplyKeyboardMarkup(keyboard = [btns], resize_keyboard = True))
@@ -224,19 +231,19 @@ async def check_capcha(message: types.Message, state: FSMContext):
     capcha_btns = capcha.split(' - ')[1]
     capcha_answers = {}
     if ' , ' not in capcha_btns:
-        reply, answer = capcha_btns.split(' / ')
+        reply, answer = capcha_btns.split(' | ')
         capcha_answers[reply] = answer
     else:
         capcha_data = capcha_btns.split(' , ')
         for data in capcha_data:
-            reply, answer = data.split(' / ')
+            reply, answer = data.split(' | ')
             capcha_answers[reply] = answer
     
     reply = capcha_answers.get(message.text)
     if reply:
         await message.answer(reply)
+        await send_custom_greet_to_user(message.from_id)
         await state.finish()
-    await send_custom_greet_to_user(message.from_id)
 
 
 async def send_custom_greet_to_user(user_id: int):
@@ -254,9 +261,9 @@ async def send_custom_greet_to_user(user_id: int):
             if buttons:
                 for button in buttons.split('\n'):
                     if button:
-                        name, url =  button.split('-')
+                        print(button)
+                        name, url =  button.split(' - ')
                         kb.add(InlineKeyboardButton(name, url))
-            
             if media:
                 file = await fetch_media_bytes(media)
                 is_video = types.InputMediaVideo(file).duration
@@ -402,7 +409,7 @@ async def edit_custom_greet_handler(callback_query: types.CallbackQuery, state: 
             """, reply_markup = await custom_greatings_kb())
             await state.finish()
 
-async def back_to_edit_greet_menue(callback_query: types.CallbackQuery, state: FSMContext):
+async def back_to_edit_greet_menu(callback_query: types.CallbackQuery, state: FSMContext):
     data = callback_query.data
     greet_id = int(data.split('_')[-1])
     greet = (await Greetings.get('id', greet_id)).data
@@ -513,10 +520,10 @@ async def delete_greet(callback_query: types.CallbackQuery, state: FSMContext):
 def register_greet(dp: Dispatcher):
     dp.register_message_handler(greet_menu, lambda m: m.text == 'Привітання', IsAdminFilter(), IsChannel(), state = "*")
     dp.register_callback_query_handler(back_to_greet_menu, lambda cb: cb.data == 'back_to_greet_menu')
-    dp.register_callback_query_handler(back_to_edit_greet_menue, lambda cb: 'back_to_edit_greet_menue' in cb.data, state = "*")
+    dp.register_callback_query_handler(back_to_edit_greet_menu, lambda cb: 'back_to_edit_greet_menu' in cb.data, state = "*")
     dp.register_callback_query_handler(add_custom_greet, lambda cb: cb.data == 'add_custom_greet')
-    dp.register_callback_query_handler(edit_capcha, lambda cb: cb.data == 'edit_capcha')
-    dp.register_callback_query_handler(change_bot_checking_status, lambda cb: cb.data == 'set_capcha_status')
+    dp.register_callback_query_handler(edit_capcha, lambda cb: cb.data in 'edit_capcha')
+    dp.register_callback_query_handler(change_bot_checking_status, lambda cb: cb.data in ('set_capcha_status', 'back_to_custom_capcha_menu'), state = "*")
     dp.register_message_handler(update_bot_checking_text, state = BotStates.EDITING_CAPCHA)
     dp.register_message_handler(custom_greet_buttons, state = CustomGreetSatates.MEDIA, content_types = types.ContentTypes.TEXT | types.ContentTypes.PHOTO | types.ContentTypes.VIDEO)
     dp.register_message_handler(procces_custom_greet, state = CustomGreetSatates.BUTTONS)

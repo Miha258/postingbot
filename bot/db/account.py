@@ -74,9 +74,9 @@ class Adds(Table):
         delay: datetime = None, 
         buttons: str = None,
         media: str = None,
-        is_publsihed: bool = None
+        is_published: bool = None
     ):
-        url_buttons = "".join([ "".join([b.text + " - " + b.url + ("\n" if b == btn[-1] else " / ") for b in btn]) if isinstance(btn, list) else btn.text + " - " + btn.url + "\n" for btn in buttons]) if buttons else None
+        url_buttons = "".join([ "".join([b.text + " - " + b.url + ("\n" if b == btn[-1] else " | ") for b in btn]) if isinstance(btn, list) else btn.text + " - " + btn.url + "\n" for btn in buttons]) if buttons else None
         await cls(
             id,
             bot_id = bot_id,
@@ -84,7 +84,7 @@ class Adds(Table):
             delay = delay,
             buttons = url_buttons,
             media = media,
-            is_publsihed = is_publsihed
+            is_published = is_published
         )()
 
 class Posts(Table):
@@ -106,11 +106,12 @@ class Posts(Table):
         watermark: str = None,
         notify: bool = None,
         delay: datetime = None,
-        media: str = None,
+        media: list = None,
         autodelete: datetime = None,
-        is_publsihed: bool = None
+        is_published: bool = None
     ):
-        url_buttons = "".join([ "".join([b.text + " - " + b.url + ("\n" if b == btn[-1] else " / ") for b in btn]) if isinstance(btn, list) else btn.text + " - " + btn.url + "\n" for btn in url_buttons])
+        url_buttons = "".join([ "".join([b.text + " - " + b.url + ("\n" if len(btn) == i else " | ") for i, b in enumerate(btn, 1)]) if isinstance(btn, list) else btn.text + " - " + btn.url + "\n" for btn in url_buttons])
+        media = "|".join([ await content.get_url() for content in media ]) if media else None 
         await cls(id, 
             bot_id = bot_id, 
             channel_id = channel_id,
@@ -126,7 +127,7 @@ class Posts(Table):
             delay = delay,
             media = media,
             autodelete = autodelete,
-            is_publsihed = is_publsihed
+            is_published = is_published
         )()
     @classmethod
     async def edit_post(
@@ -144,7 +145,12 @@ class Posts(Table):
         media: str = None,
         autodelete: datetime = None
     ):
-        url_buttons = "".join([ "".join([b.text + " - " + b.url + ("\n" if b == btn[-1] else " / ") for b in btn]) if isinstance(btn, list) else btn.text + " - " + btn.url + "\n" for btn in url_buttons])
+        url_buttons = "".join([ "".join([b.text + " - " + b.url + ("\n" if len(btn) == i else " | ") for i, b in enumerate(btn, 1)]) if isinstance(btn, list) else btn.text + " - " + btn.url + "\n" for btn in url_buttons])
+        if media:
+            if len(media) > 1:
+                media = "|".join(media)
+            elif len(media) == 1:
+                media = media[0]
         await cls.update(
             "id",
             id,

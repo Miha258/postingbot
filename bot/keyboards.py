@@ -1,7 +1,6 @@
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardButton, InlineKeyboardMarkup
-from create_bot import bot_type, get_channel
+from create_bot import bot_type
 import datetime, calendar
-from db.account import Posts
 
 back_btn = InlineKeyboardButton('Повернутися в меню', callback_data = "back_to_menu")
 back_to_edit = InlineKeyboardMarkup(inline_keyboard = [
@@ -73,7 +72,7 @@ def edit_capcha_kb(status = False, capcha_buttons: str = None):
         capcha_answers = {}
         btns = []
         for data in capcha_data:
-            reply, answer = data.split('/')
+            reply, answer = data.split(' | ')
             capcha_answers[reply] = answer
             btns.append(InlineKeyboardButton(reply, callback_data = '_'))
         inline_markup.inline_keyboard.insert(0, btns)
@@ -102,12 +101,12 @@ def get_user_kb(data: dict):
             row_btns = 0
             for i, btn in enumerate(url_buttons.split('\n')):
                 if btn:
-                    if ' / ' not in btn:
+                    if '|' not in btn:
                         name, url = btn.split(' - ')
                         user_kb.inline_keyboard.insert(i + 1, [InlineKeyboardButton(name, url)])
-                    elif ' / ' in btn:
+                    elif '|' in btn:
                         btns = []
-                        for b in btn.split(' / '):
+                        for b in btn.split('|'):
                             name, url = b.split(' - ')
                             btns.append(InlineKeyboardButton(name, url))
                         user_kb.inline_keyboard.insert(row_btns, btns)
@@ -163,6 +162,7 @@ def get_autodelete_kb() -> InlineKeyboardMarkup:
     kb = InlineKeyboardMarkup()
     button_rows = [
         [24],
+        [36],
         [48],
         [72]
     ]

@@ -1,0 +1,5 @@
+posting.db
+tokens.db
+.gitignore
+bot/__pycache__
+bot/db/__pycache__

@@ -4,7 +4,7 @@ from db.account import Posts
 from create_bot import get_channel
 from datetime import timedelta
 from states import ContentPlan
-from posting import process_new_post, edit_post
+from posting import process_new_post, edit_post, send_editible_template
 from keyboards import *
 from re import search
 from utils import fetch_media_bytes, IsAdminFilter, IsChannel
@@ -78,24 +78,13 @@ async def content_plan_list(message: types.Message, state: FSMContext):
     await state.set_state(ContentPlan.CHOOSE_DAY)
 
 async def set_calendar_state(callback_query: types.CallbackQuery, state: FSMContext):
-    await callback_query.message.edit_reply_markup(await Posts.get('channel_id', get_channel(), True), await get_plan_kb(datetime.datetime.now(), True))
+    await callback_query.message.edit_reply_markup(await Posts.get('channel_id', get_channel(), True), await get_plan_kb(None, datetime.datetime.now(), True))
     await state.set_state(ContentPlan.DATE)
 
-async def edit_planned_post(callback_query: types.CallbackQuery):
+async def edit_planned_post(callback_query: types.CallbackQuery, state: FSMContext):
     post_id = int(callback_query.data.split('_')[-1])
-    post = await Posts.get('id', post_id)
     message = callback_query.message
-    
-    media = post['media']
-    if media:
-        file = await fetch_media_bytes(media)
-        is_video = types.InputMediaVideo(file).duration
-        if is_video:
-            post = await message.answer_video(file, caption = post['post_text'], parse_mode = post["parse_mode"], reply_markup = get_edit_planed_post_kb(post_id)) 
-        elif not is_video:
-            post = await message.answer_photo(file, caption = post['post_text'], parse_mode = post["parse_mode"], reply_markup = get_edit_planed_post_kb(post_id))
-    else:
-        await message.answer(post['post_text'], reply_markup = get_edit_planed_post_kb(post_id))
+    await edit_post(message, state, post_id = post_id)
     await message.delete()
 
 async def handle_planed_post_editing(callback_query: types.CallbackQuery, state: FSMContext):

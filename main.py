@@ -216,7 +216,6 @@ async def start_bots(_):
         "autodelete": "DATE",
         "is_published": "BOOLEAN"
     })
-
     await Adds.init_table({
         "id": "INT",
         "bot_id": "INT",
