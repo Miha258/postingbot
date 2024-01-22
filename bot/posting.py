@@ -486,31 +486,31 @@ async def comfirm_delay_post(callback_query: types.CallbackQuery, state: FSMCont
             is_published = False
         )
         data.clear()
-        await message.answer(f"Пост буде опубліковано: <b>{date}</b>", parse_mode = "html", reply_markup = make_new_post_kb)
+        if date:
+            await message.answer(f"Пост буде опубліковано: <b>{date}</b>", parse_mode = "html", reply_markup = make_new_post_kb)
         await state.finish()
     except FileIsTooBig:
         await message.answer("Файл завеликий, спробуйте ще раз:")
 
 
 async def send_post(user_kb: InlineKeyboardMarkup, channel: str = None, _data: dict = None) -> types.Message:
-    global data
     channel = channel or get_channel()
-    data = _data if _data else data
-    disable_notification = not data.get("notify")
-    text = data.get('text') or data.get('post_text')
-    parse_mode = data.get("parse_mode")
-    watermark = data.get('watermark')
+    post_data = _data if _data else data
+    disable_notification = not post_data.get("notify")
+    text = post_data.get('text') or post_data.get('post_text')
+    parse_mode = post_data.get("parse_mode")
+    watermark = post_data.get('watermark')
     if watermark:
         text += "\n\n" + watermark
 
-    media = data.get('media')
+    media = post_data.get('media')
     if media:
         if isinstance(media, str):
             if '|' in media:
-                data['media'] = data['media'].split('|')
+                post_data['media'] = post_data['media'].split('|')
             else:
-                data['media'] = [media]
-            media = data.get('media')
+                post_data['media'] = [media]
+            media = post_data.get('media')
         if len(media) == 1:
             media = media[0]
             media_type = type(media)
@@ -535,11 +535,11 @@ async def send_post(user_kb: InlineKeyboardMarkup, channel: str = None, _data: d
                 elif media_type is str:
                     file = types.InputFile(BytesIO(await fetch_media_bytes(content)))
                     if 'photos' in content:
-                        media_group.attach_photo(file, parse_mode = data.get('parse_mode'))
+                        media_group.attach_photo(file, parse_mode = post_data.get('parse_mode'))
                     elif 'videos' in content:
-                        media_group.attach_video(file, parse_mode = data.get('parse_mode'))
+                        media_group.attach_video(file, parse_mode = post_data.get('parse_mode'))
     
-            if not data.get('url_buttons') and not data.get('hidden_extension_btn'):
+            if not post_data.get('url_buttons') and not post_data.get('hidden_extension_btn'):
                 media_group.media[-1].caption = text
                 post = (await bot.send_media_group(channel, media_group, disable_notification = disable_notification))[-1]
             else:
@@ -548,7 +548,7 @@ async def send_post(user_kb: InlineKeyboardMarkup, channel: str = None, _data: d
     else:
         post = await bot.send_message(channel, text, parse_mode = parse_mode, reply_markup = user_kb, disable_notification = disable_notification)
     
-    if data.get("comments"):
+    if post_data.get("comments"):
         await asyncio.sleep(5)
         chat_url = (await bot.get_chat(channel)).linked_chat_id
         chat = await bot.get_chat(chat_url)
@@ -699,8 +699,8 @@ async def change_post_data(callback_query: types.CallbackQuery, state: FSMContex
                 post = await bot.edit_message_reply_markup(chat_id = channel_id, message_id = post_id, reply_markup = user_kb)
         except MessageToEditNotFound:
             is_posted = False
-        # except BadRequest:
-        #     await message.answer("Помилка редагування.Cпробуйте ще раз")
+        except BadRequest:
+            await message.answer("Помилка редагування.Cпробуйте ще раз")
         try:
             if data.get("comments"):
                 await asyncio.sleep(5)
