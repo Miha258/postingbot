@@ -255,7 +255,7 @@ async def planned_menu(message: types.Message, state: FSMContext):
 Завтра:
 {f"{separator}".join([add['adds_text'] or "" for add in tomorrow]) if tomorrow else 'пусто'}
 """
-    await message.answer(planned_menu_message, reply_markup = get_adds_kb()) #reply_markup = get_adds_list_kb()
+    await message.answer(planned_menu_message, reply_markup = get_adds_kb())
 
 async def adds_manager():
     date_format = "%Y-%m-%d %H:%M:%S"
@@ -276,6 +276,15 @@ async def adds_manager():
                 print(e)
         await asyncio.sleep(5)
 
+async def show_adds_plan(callback_query: types.CallbackQuery, state: FSMContext):
+    message = callback_query.message
+    await state.finish()
+    date = datetime.datetime.now()
+    await message.answer('У цьому розділі ви можете переглядати та редагувати всі заплановані публікації у своїх проектах. Виберіть канал для перегляду контент-плану:',
+    reply_markup = await get_plan_kb(await Adds.get('bot_id', get_channel(), True), date))
+    await state.set_data({'date_offset': 0})
+    await state.set_state(BotAdds.CHOOSE_DATE())
+
 def register_adds(dp: Dispatcher):
     asyncio.get_event_loop().create_task(adds_manager())
     dp.register_message_handler(planned_menu, lambda m: m.text == "Розсилка", IsAdminFilter(), state = "*")
@@ -286,3 +295,4 @@ def register_adds(dp: Dispatcher):
     dp.register_message_handler(edit_adds_buttons, state = BotAdds.BTN)
     dp.register_callback_query_handler(choose_date_handler, state = BotAdds.DATE)
     dp.register_message_handler(delay_adds_handler, state = BotAdds.DATE)
+    # dp.register_callback_query_handler(show_adds_plan, lambda cb: cb.data == 'adds_calendar')

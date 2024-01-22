@@ -4,10 +4,10 @@ from db.account import Posts
 from create_bot import get_channel
 from datetime import timedelta
 from states import ContentPlan
-from posting import process_new_post, edit_post, send_editible_template
+from posting import process_new_post, edit_post
 from keyboards import *
 from re import search
-from utils import fetch_media_bytes, IsAdminFilter, IsChannel
+from utils import IsAdminFilter, IsChannel
 
 
 async def plan_post(callback_query: types.CallbackQuery, state: FSMContext):

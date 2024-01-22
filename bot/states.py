@@ -21,6 +21,7 @@ class BotAdds(StatesGroup):
     BTN = State()
     DATE = State()
     CHECK = State()
+    CHOOSE_DATE = State()
 
 
 class ContentPlan(StatesGroup):
