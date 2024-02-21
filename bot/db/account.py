@@ -151,6 +151,8 @@ class Posts(Table):
                 media = "|".join(media)
             elif len(media) == 1:
                 media = media[0]
+        if not media:
+            media = None
         await cls.update(
             "id",
             id,

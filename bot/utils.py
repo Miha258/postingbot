@@ -2,6 +2,10 @@ from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, Message
 import aiohttp
 from aiogram.dispatcher.filters import BoundFilter
 from create_bot import owner, get_channel
+import imageio
+from PIL import Image
+import imageio
+import sys, os
 
 def get_button_by_callback_data(callback_query: str, keyboard: InlineKeyboardMarkup) -> InlineKeyboardButton:
     for row in keyboard.inline_keyboard:
@@ -33,3 +37,7 @@ class IsChannel(BoundFilter):
         else:
             await message.answer('Ви не вибрали канал, скористайтеся меню, щоб це зробити:')
             return False
+
+def send_gif_from_file(file: bytes):
+    with open('temp.gif', 'wb') as f:
+        f.write(file)

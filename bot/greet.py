@@ -122,7 +122,6 @@ async def option_handler(callback_query: types.CallbackQuery):
             capcha = (await Channels.update("id", _channel['id'], capcha = "Підтвердіть, що ви не робот - Відмовитися | Ви відмовилися від перевірки , Підтвердити | Перевірку пройдено"))['capcha']
         capcha_text, capcha_btns = capcha.split(' - ')
         return await callback_query.message.edit_text(f'<b>Текст капчі:</b> \n\n{capcha_text if capcha_text else "Немає"}', reply_markup = edit_capcha_kb(type in channels[channel]['types'], capcha_btns))
-
     else:
         if type in channels[channel]['types']:
             channels[channel]['types'].remove(type)
@@ -500,6 +499,8 @@ async def edit_greet_media(message: types.Message, state: FSMContext):
         await message.answer_photo(media.file_id, greet['greet_text'], reply_markup = await edit_custom_greating_kb(greet_id))
     elif isinstance(media, types.Video):
         await message.answer_video(media.file_id, caption = greet['greet_text'], reply_markup = await edit_custom_greating_kb(greet_id))
+    elif isinstance(media, types.Animation):
+        await message.answer_animation(media.file_id, caption = greet['greet_text'], reply_markup = await edit_custom_greating_kb(greet_id))
     await state.set_state(CustomGreetSatates.GREET_EDITING)
 
 
@@ -531,7 +532,7 @@ def register_greet(dp: Dispatcher):
     dp.register_callback_query_handler(edit_custom_greet_handler, state = CustomGreetSatates.GREET_EDITING)
     dp.register_message_handler(edit_greet_text, state = CustomGreetSatates.EDIT_TEXT)
     dp.register_message_handler(edit_greet_buttons, state = CustomGreetSatates.EDIT_BUTTONS)
-    dp.register_message_handler(edit_greet_media, state = CustomGreetSatates.EDIT_MEDIA, content_types = types.ContentTypes.PHOTO | types.ContentTypes.VIDEO) 
+    dp.register_message_handler(edit_greet_media, state = CustomGreetSatates.EDIT_MEDIA, content_types = types.ContentTypes.PHOTO | types.ContentTypes.VIDEO | types.ContentTypes.ANIMATION) 
     dp.register_callback_query_handler(edit_button_greet_notify, lambda cb: cb.data == 'edit_button_greet_notify')
     dp.register_callback_query_handler(edit_greet_autodelete, state = CustomGreetSatates.EDIT_AUTODELETE)
     dp.register_callback_query_handler(edit_greet_delay, state = CustomGreetSatates.EDIT_DELAY)

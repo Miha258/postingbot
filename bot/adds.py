@@ -170,6 +170,9 @@ async def delay_adds_handler(message: types.Message, state: FSMContext):
         if not date:
             return await message.answer("Ви не вибрали дату")
         try:
+            if len(date_string) == 4:
+                date_string = "0" + date_string 
+                
             if re.search(date_time_regex, date_string):
                 time = datetime.datetime.strptime(date_string, "%H:%M").time()
                 date = datetime.datetime.combine(date, time)
@@ -218,6 +221,8 @@ async def send_add_to_user(user_kb: InlineKeyboardMarkup, add: dict[str]):
                         await bot.send_photo(channel, file, text, reply_markup = user_kb)
                     elif 'videos' in media:
                         await bot.send_video(channel, file, text, reply_markup = user_kb)
+                    elif 'animations' in media:
+                        await bot.send_animation(channel, file, text, reply_markup = user_kb)
                 else:
                     await bot.send_message(channel, text, reply_markup = user_kb)
                 counter += 1
@@ -295,4 +300,4 @@ def register_adds(dp: Dispatcher):
     dp.register_message_handler(edit_adds_buttons, state = BotAdds.BTN)
     dp.register_callback_query_handler(choose_date_handler, state = BotAdds.DATE)
     dp.register_message_handler(delay_adds_handler, state = BotAdds.DATE)
-    # dp.register_callback_query_handler(show_adds_plan, lambda cb: cb.data == 'adds_calendar')
+    #    dp.register_callback_query_handler(show_adds_plan, lambda cb: cb.data == 'adds_calendar')

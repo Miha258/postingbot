@@ -16,6 +16,7 @@ from io import BytesIO
 
 data = {}
 preview = True
+notify = True
 def get_kb():
     watermark = data.get('watermark')
     if watermark:
@@ -76,7 +77,7 @@ def get_kb():
             InlineKeyboardButton(
                 "🔕", 
                 callback_data = "notify_on"
-        ) if not data["notify"] else 
+        ) if not notify else 
             InlineKeyboardButton(
                 "🔔", 
                 callback_data = "notify_off"
@@ -140,7 +141,8 @@ async def send_editible_template(message: types.Message):
                         if 'photos' in group_part:
                             media_group.attach_photo(file)
                         elif 'videos' in group_part:
-                            media_group.attach_photo(file)
+                            media_group.attach_video(file)
+
             await message.answer_media_group(media_group)
             await message.answer(data["text"], parse_mode = data.get("parse_mode"), reply_markup = kb)
         elif len(media) == 1:
@@ -148,15 +150,19 @@ async def send_editible_template(message: types.Message):
             media_type = type(media)
             match media_type:
                 case types.PhotoSize:
-                    await message.answer_photo(media.file_id, data["text"], parse_mode = data.get("parse_mode"), reply_markup = kb)
+                    await message.answer_photo(media.file_id, caption = data["text"], parse_mode = data.get("parse_mode"), reply_markup = kb)
                 case types.Video:
-                    await message.answer_video(media.file_id, data["text"], parse_mode = data.get("parse_mode"), reply_markup = kb)
+                    await message.answer_video(media.file_id, caption = data["text"], parse_mode = data.get("parse_mode"), reply_markup = kb)
+                case types.Animation:
+                    await message.answer_animation(media.file_id, caption = data["text"], parse_mode = data.get("parse_mode"), reply_markup = kb)
                 case str:
                     file = await fetch_media_bytes(media)
                     if 'photos' in media:
-                        await message.answer_photo(file, data["text"], parse_mode = data.get("parse_mode"), reply_markup = kb)
+                        await message.answer_photo(file, caption = data["text"], parse_mode = data.get("parse_mode"), reply_markup = kb)
                     elif 'videos' in media:
-                        await message.answer_video(file, data["text"], parse_mode = data.get("parse_mode"), reply_markup = kb)
+                        await message.answer_video(file, caption = data["text"], parse_mode = data.get("parse_mode"), reply_markup = kb)
+                    elif 'animations' in media:
+                        await message.answer_animation(file, caption = data["text"], parse_mode = data.get("parse_mode"), reply_markup = kb)
     else:
         await message.answer(data["text"], parse_mode = data.get("parse_mode"), reply_markup = kb)
 
@@ -167,7 +173,6 @@ async def process_new_post(message: types.Message, state: FSMContext):
     data["text"] = None
     data["watermark"] = (await Channels.get('chat_id', get_channel()))['watermark']
     data["comments"] = False
-    data["notify"] = False
     data["url_buttons"] = []
     data["parse_mode"] = types.ParseMode.HTML
     data["media"] = []
@@ -232,7 +237,7 @@ async def edit_post_command(callback_query: types.CallbackQuery, state: FSMConte
             return
 
 async def editing_text_handler(message: types.Message, state: FSMContext):
-    media = message.photo[-1] if message.photo else message.video
+    media = message.photo[-1] if message.photo else message.video or message.animation
     if media:
         data["media"].append(media)
 
@@ -252,7 +257,8 @@ async def editing_text_handler(message: types.Message, state: FSMContext):
     
 
 async def attaching_media_handler(message: types.Message, state: FSMContext):
-    media = message.photo[-1] if message.photo else message.video
+    media = message.photo[-1] if message.photo else message.video or message.animation
+
     if data.get('is_editing') and len(data.get('media')) > 1: 
         data["media"].append(await media.get_url())
     elif data.get('is_editing') and len(data.get('media')) == 1:
@@ -446,6 +452,9 @@ async def delay_post_handler(message: types.Message, state: FSMContext):
         if not date:
             return await message.answer("Ви не вибрали дату")
         try:
+            if len(date_string) == 4:
+                date_string = "0" + date_string 
+
             if re.search(date_time_regex, date_string):
                 time = datetime.datetime.strptime(date_string, "%H:%M").time()
                 date = datetime.datetime.combine(date, time)
@@ -479,7 +488,7 @@ async def comfirm_delay_post(callback_query: types.CallbackQuery, state: FSMCont
             data.get("parse_mode"),
             data.get('comments'),
             data.get('watermark'),
-            data.get('notify'),
+            notify,
             date,
             media,
             data.get('autodelete'),
@@ -518,12 +527,18 @@ async def send_post(user_kb: InlineKeyboardMarkup, channel: str = None, _data: d
                 post = await bot.send_photo(channel, media.file_id, caption = text, parse_mode = parse_mode, reply_markup = user_kb, disable_notification = disable_notification)
             elif media_type is types.Video:
                 post = await bot.send_video(channel, media.file_id, caption = text, parse_mode = parse_mode, reply_markup = user_kb, disable_notification = disable_notification) 
+            elif media_type is types.Animation:
+                post = await bot.send_animation(channel, media.file_id, caption = text, parse_mode = parse_mode, reply_markup = user_kb, disable_notification = disable_notification) 
             elif media_type is str:
                 file = await fetch_media_bytes(media)
                 if 'photos' in media:
                     post = await bot.send_photo(channel, file, caption = text, parse_mode = parse_mode, reply_markup = user_kb, disable_notification = disable_notification)
                 elif 'videos' in media:
                     post = await bot.send_video(channel, file, caption = text, parse_mode = parse_mode, reply_markup = user_kb, disable_notification = disable_notification)
+                elif 'animations' in media:
+                    loop = asyncio.get_event_loop()
+                    await loop.run_in_executor(None, lambda: send_gif_from_file(file))
+                    post = await bot.send_animation(channel, types.InputFile('temp.gif'), caption = text, parse_mode = parse_mode, reply_markup = user_kb, disable_notification = disable_notification)
         elif len(media) > 1:
             media_group = types.MediaGroup()
             for content in media:
@@ -538,7 +553,7 @@ async def send_post(user_kb: InlineKeyboardMarkup, channel: str = None, _data: d
                         media_group.attach_photo(file, parse_mode = post_data.get('parse_mode'))
                     elif 'videos' in content:
                         media_group.attach_video(file, parse_mode = post_data.get('parse_mode'))
-    
+
             if not post_data.get('url_buttons') and not post_data.get('hidden_extension_btn'):
                 media_group.media[-1].caption = text
                 post = (await bot.send_media_group(channel, media_group, disable_notification = disable_notification))[-1]
@@ -580,7 +595,7 @@ async def create_post(callback_query: types.CallbackQuery, state: FSMContext):
         data.get("url_buttons"),
         data.get("parse_mode"),
         data.get('comments'),
-        data.get('notify'),
+        notify,
         data.get('watermark'),
         data.get('delay') or datetime.datetime.now().replace(microsecond = 0),
         media,
@@ -592,7 +607,8 @@ async def create_post(callback_query: types.CallbackQuery, state: FSMContext):
 
 
 async def notification_handler(callback_query: types.CallbackQuery, state: FSMContext):
-    data["notify"] = not data["notify"]
+    global notify
+    notify = not notify
     kb = get_kb()
     await callback_query.message.edit_reply_markup(reply_markup = kb)
     await state.set_state(BotStates.EDITING_POST)
@@ -670,65 +686,67 @@ async def change_post_data(callback_query: types.CallbackQuery, state: FSMContex
     watermark = data.get('watermark')
     if watermark:
         text += "\n\n" + watermark 
-        is_posted = True
-        try:
-            if media:
-                if len(media) == 1:
-                    media = media[0]
-                    file = BytesIO(await fetch_media_bytes(media))
-                    input_media = types.InputFile(BytesIO(await fetch_media_bytes(media)))
-                    if 'photos' in media:
-                        input_media = types.InputMediaPhoto(file, text, parse_mode = data.get('parse_mode'))
-                    elif 'videos' in media:
-                        input_media = types.InputMediaVideo(file, text, parse_mode = data.get('parse_mode'))
-                    
-                    if data.get('media_changed'):
-                        post = await bot.edit_message_media(chat_id = channel_id, message_id = post_id, media = input_media)
-                    if data.get('text_changed'):
-                        post = await bot.edit_message_caption(channel_id, post_id, caption = text, parse_mode = data.get('parse_mode'))
-                elif len(media) > 1:
-                    if data.get('text_changed'):
-                        try:
-                            post = await bot.edit_message_caption(channel_id, post_id, caption = text, parse_mode = data.get('parse_mode'))
-                        except BadRequest:
-                            post = await bot.edit_message_text(chat_id = channel_id, message_id = post_id, text = text, parse_mode = data.get('parse_mode'))
-            else:
+    is_posted = True
+    try:
+        if media:
+            if len(media) == 1:
+                media = media[0]
+                file = BytesIO(await fetch_media_bytes(media))
+                input_media = types.InputFile(BytesIO(await fetch_media_bytes(media)))
+                if 'photos' in media:
+                    input_media = types.InputMediaPhoto(file, caption = text, parse_mode = data.get('parse_mode'))
+                elif 'videos' in media:
+                    input_media = types.InputMediaVideo(file, caption = text, parse_mode = data.get('parse_mode'))
+                elif 'animations' in media:
+                    input_media = types.InputMediaAnimation(file, caption = text, parse_mode = data.get('parse_mode'))
+
+                if data.get('media_changed'):
+                    post = await bot.edit_message_media(chat_id = channel_id, message_id = post_id, media = input_media, reply_markup = user_kb)
                 if data.get('text_changed'):
-                    post = await bot.edit_message_text(chat_id = channel_id, message_id = post_id, text = text, parse_mode = data.get('parse_mode'))
-            if data.get('keyboard_changed'):
-                post = await bot.edit_message_reply_markup(chat_id = channel_id, message_id = post_id, reply_markup = user_kb)
-        except MessageToEditNotFound:
-            is_posted = False
-        except BadRequest:
-            await message.answer("Помилка редагування.Cпробуйте ще раз")
-        try:
-            if data.get("comments"):
-                await asyncio.sleep(5)
-                chat_url = (await bot.get_chat(post_id)).linked_chat_id
-                chat = await bot.get_chat(chat_url)
-                await chat.pinned_message.delete()
-        except Unauthorized:
-            await message.answer("Щоб вимкнути коментарі - додайте мене у бесіду каналу")
-        
-        await Posts.edit_post(
-            post_id,
-            data.get("text"),
-            data.get("hidden_extension_text_1"),
-            data.get("hidden_extension_text_2"),
-            data.get("hidden_extension_btn"),
-            data.get("url_buttons"),
-            data.get("parse_mode"),
-            data.get("comments"),
-            data.get("notify"),
-            data.get("watermark"),
-            data.get('media'),
-            data.get('autodelete')
-        )
-        if is_posted:
-            await callback_query.message.answer(f'<b><a href="{post.url}">Пост</a> успішно відредаговано</b>', parse_mode = "html")
+                    post = await bot.edit_message_caption(channel_id, post_id, caption = text, parse_mode = data.get('parse_mode'), reply_markup = user_kb)
+            elif len(media) > 1:
+                if data.get('text_changed'):
+                    try:
+                        post = await bot.edit_message_caption(channel_id, post_id, caption = text, parse_mode = data.get('parse_mode'))
+                    except BadRequest:
+                        post = await bot.edit_message_text(chat_id = channel_id, message_id = post_id, text = text, parse_mode = data.get('parse_mode'), reply_markup = user_kb)
         else:
-            await callback_query.message.answer('Пост відредаговано')
-        await state.finish()
+            if data.get('text_changed'):
+                post = await bot.edit_message_text(chat_id = channel_id, message_id = post_id, text = text, parse_mode = data.get('parse_mode'), reply_markup = user_kb)
+        if data.get('keyboard_changed'):
+            post = await bot.edit_message_reply_markup(chat_id = channel_id, message_id = post_id, reply_markup = user_kb)
+    except MessageToEditNotFound:
+        is_posted = False
+    except BadRequest:
+        await message.answer("Помилка редагування.Cпробуйте ще раз")
+    try:
+        if data.get("comments"):
+            await asyncio.sleep(5)
+            chat_url = (await bot.get_chat(post_id)).linked_chat_id
+            chat = await bot.get_chat(chat_url)
+            await chat.pinned_message.delete()
+    except Unauthorized:
+        await message.answer("Щоб вимкнути коментарі - додайте мене у бесіду каналу")
+    
+    await Posts.edit_post(
+        post_id,
+        data.get("text"),
+        data.get("hidden_extension_text_1"),
+        data.get("hidden_extension_text_2"),
+        data.get("hidden_extension_btn"),
+        data.get("url_buttons"),
+        data.get("parse_mode"),
+        data.get("comments"),
+        notify,
+        data.get("watermark"),
+        data.get('media'),
+        data.get('autodelete')
+    )
+    if is_posted:
+        await callback_query.message.answer(f'<b><a href="{post.url}">Пост</a> успішно відредаговано</b>', parse_mode = "html")
+    else:
+        await callback_query.message.answer('Пост відредаговано')
+    await state.finish()
             
 async def post_manager():
     date_format = "%Y-%m-%d %H:%M:%S"
@@ -736,7 +754,7 @@ async def post_manager():
         posts = await Posts.get("bot_id", bot.id, True)
         if posts:
             for post in posts:
-                try:
+                # try:
                     post_data = post.data 
                     is_published = post_data.get('is_published')
                     if not is_published:
@@ -751,8 +769,8 @@ async def post_manager():
                                 if datetime.datetime.strptime(autodelete, date_format) <= datetime.datetime.now():
                                     await bot.delete_message(post_data["channel_id"], post_data["id"])
                                     await Posts.delete(post_data["id"])
-                except Exception as e:
-                    print(e)
+                # except Exception as e:
+                #     print(e)
         await asyncio.sleep(5)
 
 
@@ -762,12 +780,12 @@ def register_posting(dp: Dispatcher):
     dp.register_callback_query_handler(set_preview, lambda cb: cb.data == 'set_preview', state = "*")
     dp.register_callback_query_handler(back_to_editing, lambda cb: "back_to_edit" == cb.data, state = "*")
     dp.register_message_handler(choose_post_for_edit, lambda m: m.text == 'Редагувати пост', IsAdminFilter(), state = '*')
-    dp.register_message_handler(edit_post, state = BotStates.CHANGE_POST, content_types = [types.ContentType.TEXT, types.ContentType.VIDEO, types.ContentType.PHOTO])
+    dp.register_message_handler(edit_post, state = BotStates.CHANGE_POST, content_types = [types.ContentType.TEXT, types.ContentType.VIDEO, types.ContentType.PHOTO, types.ContentType.ANIMATION])
     dp.register_callback_query_handler(change_post_data, lambda cb: "change_post_data" in cb.data, state = BotStates.EDITING_POST)
     dp.register_callback_query_handler(edit_post_command, state = BotStates.EDITING_POST)
     dp.register_message_handler(url_button_handler, state = EditStates.URL_BUTTONS)
-    dp.register_message_handler(editing_text_handler, lambda m: m.text not in ('Постинг', 'Контент-план', 'Редагувати пост', 'Вибрати канал', 'Тарифи'), state = EditStates.EDITING_TEXT, content_types = [types.ContentType.TEXT, types.ContentType.VIDEO, types.ContentType.PHOTO])
-    dp.register_message_handler(attaching_media_handler, state = EditStates.ATTACHING_MEDIA, content_types=[types.ContentType.PHOTO, types.ContentType.VIDEO])
+    dp.register_message_handler(editing_text_handler, lambda m: m.text not in ('Постинг', 'Контент-план', 'Редагувати пост', 'Вибрати канал', 'Тарифи'), state = EditStates.EDITING_TEXT, content_types = [types.ContentType.TEXT, types.ContentType.VIDEO, types.ContentType.PHOTO, types.ContentType.ANIMATION])
+    dp.register_message_handler(attaching_media_handler, state = EditStates.ATTACHING_MEDIA, content_types=[types.ContentType.PHOTO, types.ContentType.VIDEO, types.ContentType.ANIMATION])
     dp.register_callback_query_handler(open_modal, CallbackData("hidden_extension_use").filter())
     dp.register_message_handler(hidden_extension_handler_1, state = EditStates.HIDDEN_EXTENSION_BTN)
     dp.register_message_handler(hidden_extension_handler_2, state = EditStates.HIDDEN_EXTENSION_TEXT_1)

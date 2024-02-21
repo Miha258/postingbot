@@ -116,6 +116,9 @@ async def edit_post_date(message: types.Message, state: FSMContext):
         if not date:
             return await message.answer("Ви не вибрали дату")
         
+        if len(date_string) == 4:
+            date_string = "0" + date_string 
+            
         if search(date_time_regex, date_string):
             time = datetime.datetime.strptime(date_string, "%H:%M").time()
             date = datetime.datetime.combine(date, time)

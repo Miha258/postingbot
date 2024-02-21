@@ -70,7 +70,6 @@ class DB:
         columns = ', '.join(f"{column} = ?" for column in data.keys())
         if await self.read_record(table, by, value, True):
             query = f"UPDATE {table} SET {columns} WHERE id = ?"
-            print(query)
             await self.cursor.execute(query, list(data.values()) + [value])
         else:
             raise DocumentNotFound
