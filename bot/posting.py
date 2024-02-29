@@ -137,11 +137,11 @@ async def send_editible_template(message: types.Message):
                     case types.Video:
                         media_group.attach_video(group_part.file_id)
                     case str:
-                        file = types.InputFile(BytesIO(await fetch_media_bytes(group_part)))
-                        if 'photos' in group_part:
-                            media_group.attach_photo(file)
-                        elif 'videos' in group_part:
-                            media_group.attach_video(file)
+                        file_type, file_id = group_part.split('/')
+                        if 'photos' == file_type:
+                            media_group.attach_photo(file_id)
+                        elif 'videos' == file_type:
+                            media_group.attach_video(file_id)
 
             await message.answer_media_group(media_group)
             await message.answer(data["text"], parse_mode = data.get("parse_mode"), reply_markup = kb)
@@ -156,13 +156,15 @@ async def send_editible_template(message: types.Message):
                 case types.Animation:
                     await message.answer_animation(media.file_id, caption = data["text"], parse_mode = data.get("parse_mode"), reply_markup = kb)
                 case str:
-                    file = await fetch_media_bytes(media)
-                    if 'photos' in media:
-                        await message.answer_photo(file, caption = data["text"], parse_mode = data.get("parse_mode"), reply_markup = kb)
-                    elif 'videos' in media:
-                        await message.answer_video(file, caption = data["text"], parse_mode = data.get("parse_mode"), reply_markup = kb)
-                    elif 'animations' in media:
-                        await message.answer_animation(file, caption = data["text"], parse_mode = data.get("parse_mode"), reply_markup = kb)
+                    print(media)
+                    file_type, file_id = media.split('/')
+                    match file_type:
+                        case 'photos':
+                            await message.answer_photo(file_id, caption = data["text"], parse_mode = data.get("parse_mode"), reply_markup = kb)
+                        case 'videos':
+                            await message.answer_video(file_id, caption = data["text"], parse_mode = data.get("parse_mode"), reply_markup = kb)
+                        case 'animations':
+                            await message.answer_animation(file_id, caption = data["text"], parse_mode = data.get("parse_mode"), reply_markup = kb)
     else:
         await message.answer(data["text"], parse_mode = data.get("parse_mode"), reply_markup = kb)
 
@@ -260,13 +262,13 @@ async def attaching_media_handler(message: types.Message, state: FSMContext):
     media = message.photo[-1] if message.photo else message.video or message.animation
 
     if data.get('is_editing') and len(data.get('media')) > 1: 
-        data["media"].append(await media.get_url())
+        data["media"].append(media.mime_type.split('/')[0] + f's/{media.file_id}')
     elif data.get('is_editing') and len(data.get('media')) == 1:
-        before_media_url = data.get('media')[0]
+        before_media_url = await (await bot.get_file(data.get('media')[0].split('/')[1])).get_url()
         new_media_url = await media.get_url()
         if await fetch_media_bytes(new_media_url) == await fetch_media_bytes(before_media_url):
             return await message.answer('Медія файл має відрізнятися')
-        data["media"] = [await media.get_url()]
+        data["media"] = [media.mime_type.split('/')[0] + f's/{media.file_id}']
         data["media_changed"] = True
     else:
         data["media"].append(media)
@@ -523,36 +525,38 @@ async def send_post(user_kb: InlineKeyboardMarkup, channel: str = None, _data: d
         if len(media) == 1:
             media = media[0]
             media_type = type(media)
-            if media_type is types.PhotoSize:
-                post = await bot.send_photo(channel, media.file_id, caption = text, parse_mode = parse_mode, reply_markup = user_kb, disable_notification = disable_notification)
-            elif media_type is types.Video:
-                post = await bot.send_video(channel, media.file_id, caption = text, parse_mode = parse_mode, reply_markup = user_kb, disable_notification = disable_notification) 
-            elif media_type is types.Animation:
-                post = await bot.send_animation(channel, media.file_id, caption = text, parse_mode = parse_mode, reply_markup = user_kb, disable_notification = disable_notification) 
-            elif media_type is str:
-                file = await fetch_media_bytes(media)
-                if 'photos' in media:
-                    post = await bot.send_photo(channel, file, caption = text, parse_mode = parse_mode, reply_markup = user_kb, disable_notification = disable_notification)
-                elif 'videos' in media:
-                    post = await bot.send_video(channel, file, caption = text, parse_mode = parse_mode, reply_markup = user_kb, disable_notification = disable_notification)
-                elif 'animations' in media:
-                    loop = asyncio.get_event_loop()
-                    await loop.run_in_executor(None, lambda: send_gif_from_file(file))
-                    post = await bot.send_animation(channel, types.InputFile('temp.gif'), caption = text, parse_mode = parse_mode, reply_markup = user_kb, disable_notification = disable_notification)
+            match media_type:
+                case types.PhotoSize:
+                    post = await bot.send_photo(channel, media.file_id, caption = text, parse_mode = parse_mode, reply_markup = user_kb, disable_notification = disable_notification)
+                case types.Video:
+                    post = await bot.send_video(channel, media.file_id, caption = text, parse_mode = parse_mode, reply_markup = user_kb, disable_notification = disable_notification) 
+                case types.Animation:
+                    post = await bot.send_animation(channel, media.file_id, caption = text, parse_mode = parse_mode, reply_markup = user_kb, disable_notification = disable_notification) 
+                case _:
+                    file_type, file_id = media.split('/')
+                    match file_type:
+                        case 'photos':
+                            post = await bot.send_photo(channel, file_id, caption = text, parse_mode = parse_mode, reply_markup = user_kb, disable_notification = disable_notification)
+                        case 'videos':
+                            post = await bot.send_video(channel, file_id, caption = text, parse_mode = parse_mode, reply_markup = user_kb, disable_notification = disable_notification)
+                        case 'animations':
+                            post = await bot.send_animation(channel, file_id, caption = text, parse_mode = parse_mode, reply_markup = user_kb, disable_notification = disable_notification,)
         elif len(media) > 1:
             media_group = types.MediaGroup()
             for content in media:
                 media_type = type(content)
-                if media_type is types.PhotoSize:
-                    media_group.attach_photo(content.file_id)
-                elif media_type is types.Video:
-                    media_group.attach_video(content.file_id)
-                elif media_type is str:
-                    file = types.InputFile(BytesIO(await fetch_media_bytes(content)))
-                    if 'photos' in content:
-                        media_group.attach_photo(file, parse_mode = post_data.get('parse_mode'))
-                    elif 'videos' in content:
-                        media_group.attach_video(file, parse_mode = post_data.get('parse_mode'))
+                match media_type:
+                    case types.PhotoSize:
+                        media_group.attach_photo(content.file_id)
+                    case types.Video:
+                        media_group.attach_video(content.file_id)
+                    case _:
+                        file_type, file_id = content.split('/')
+                        match file_type:
+                            case 'photos':
+                                media_group.attach_photo(file_id, parse_mode = post_data.get('parse_mode'))
+                            case 'videos':
+                                media_group.attach_video(file_id, parse_mode = post_data.get('parse_mode'))
 
             if not post_data.get('url_buttons') and not post_data.get('hidden_extension_btn'):
                 media_group.media[-1].caption = text
@@ -691,14 +695,14 @@ async def change_post_data(callback_query: types.CallbackQuery, state: FSMContex
         if media:
             if len(media) == 1:
                 media = media[0]
-                file = BytesIO(await fetch_media_bytes(media))
-                input_media = types.InputFile(BytesIO(await fetch_media_bytes(media)))
-                if 'photos' in media:
-                    input_media = types.InputMediaPhoto(file, caption = text, parse_mode = data.get('parse_mode'))
-                elif 'videos' in media:
-                    input_media = types.InputMediaVideo(file, caption = text, parse_mode = data.get('parse_mode'))
-                elif 'animations' in media:
-                    input_media = types.InputMediaAnimation(file, caption = text, parse_mode = data.get('parse_mode'))
+                file_type, file_id = media.split('/')
+                match file_type:
+                    case 'photos':
+                        input_media = types.InputMediaPhoto(file_id, caption = text, parse_mode = data.get('parse_mode'))
+                    case 'videos':
+                        input_media = types.InputMediaVideo(file_id, caption = text, parse_mode = data.get('parse_mode'))
+                    case 'animations':
+                        input_media = types.InputMediaAnimation(file_id, caption = text, parse_mode = data.get('parse_mode'))
 
                 if data.get('media_changed'):
                     post = await bot.edit_message_media(chat_id = channel_id, message_id = post_id, media = input_media, reply_markup = user_kb)

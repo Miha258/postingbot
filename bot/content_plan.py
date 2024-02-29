@@ -23,6 +23,9 @@ async def choose_plan_post_time(message: types.Message, state: FSMContext):
         date_time_regex = r'\d{2}:\d{2}'
         date_string = message.text
         date = data["date"]
+    
+    if len(date_string) == 4:
+        date_string = "0" + date_string 
         
     if search(date_time_regex, date_string):
         time = datetime.datetime.strptime(date_string, "%H:%M").time()
@@ -58,7 +61,7 @@ async def set_full_calendar_day(callback_query: types.CallbackQuery, state: FSMC
         if data.get('post_id'):
             await callback_query.answer(f'Ви вибрали: {date.strftime("%Y-%m-%d")}')
         else:
-            await callback_query.message.edit_reply_markup(await Posts.get('channel_id', get_channel(), True), await get_plan_kb(date))
+            await callback_query.message.edit_reply_markup(await get_plan_kb(await Posts.get('channel_id', get_channel(), True), date))
             await state.set_state(ContentPlan.CHOOSE_DAY)
 
 async def set_full_calendar_month(callback_query: types.CallbackQuery, state: FSMContext):
@@ -78,7 +81,7 @@ async def content_plan_list(message: types.Message, state: FSMContext):
     await state.set_state(ContentPlan.CHOOSE_DAY)
 
 async def set_calendar_state(callback_query: types.CallbackQuery, state: FSMContext):
-    await callback_query.message.edit_reply_markup(await Posts.get('channel_id', get_channel(), True), await get_plan_kb(None, datetime.datetime.now(), True))
+    await callback_query.message.edit_reply_markup(await get_plan_kb(None, datetime.datetime.now(), True))
     await state.set_state(ContentPlan.DATE)
 
 async def edit_planned_post(callback_query: types.CallbackQuery, state: FSMContext):

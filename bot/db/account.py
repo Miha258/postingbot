@@ -109,9 +109,11 @@ class Posts(Table):
         media: list = None,
         autodelete: datetime = None,
         is_published: bool = None
-    ):
+    ):  
+        
+        find_media_type = lambda string: [t for t in ('photos', 'videos', 'animations') if t in string][0]
         url_buttons = "".join([ "".join([b.text + " - " + b.url + ("\n" if len(btn) == i else " | ") for i, b in enumerate(btn, 1)]) if isinstance(btn, list) else btn.text + " - " + btn.url + "\n" for btn in url_buttons])
-        media = "|".join([ await content.get_url() for content in media ]) if media else None 
+        media = "|".join([ find_media_type(await content.get_url()) + f'/{content.file_id}' for content in media ]) if media else None 
         await cls(id, 
             bot_id = bot_id, 
             channel_id = channel_id,
