@@ -1,5 +1,5 @@
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardButton, InlineKeyboardMarkup
-from create_bot import bot_type
+from create_bot import bot_type, bot
 import datetime, calendar
 
 back_btn = InlineKeyboardButton('Повернутися в меню', callback_data = "back_to_menu")
@@ -179,15 +179,14 @@ async def get_plan_kb(data, date: datetime.datetime, full = False):
     kb = InlineKeyboardMarkup()
     if data:
         for record in data:
-            if record['delay']:
+            if record['delay'] and not record['is_published']:
                 delay = datetime.datetime.strptime(record['delay'], "%Y-%m-%d %H:%M:%S")
                 if delay.date() == date.date():
                     kb.add(InlineKeyboardButton(
-                        f"📅 {record['delay']}",
+                        f"📅 {record['post_text'][:15]}... {':'.join(record['delay'].split(' ')[1].split(':')[:-1])}",
                         callback_data = f'edit_planned_post_{record["id"]}'
                     )
             )
-                    
     if full:
         return get_calendar()  
         

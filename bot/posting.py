@@ -11,8 +11,7 @@ from datetime import datetime
 from states import *
 from utils import *
 from keyboards import *
-from db.account import Posts, Channels
-from io import BytesIO
+from db.account import Posts, Channels, Table
 
 data = {}
 preview = True
@@ -23,6 +22,9 @@ def get_kb():
         watermark = re.search(r'<a.*?>(.*?)</a>', watermark) or re.search(r'\[([^\]]+)\]\([^)]+\)', watermark)
         if watermark:
             watermark = watermark.group(1)
+
+    autodelete = datetime.datetime.strptime(data.get('autodelete'), '%Y-%m-%d %H:%M:%S') if isinstance(data.get('autodelete'), str) else data.get('autodelete')
+    print(type(autodelete))
     kb = InlineKeyboardMarkup(inline_keyboard = [
     [
         InlineKeyboardButton("Змінити текст", callback_data = "edit_text"),
@@ -40,7 +42,7 @@ def get_kb():
         InlineKeyboardButton("Додати автопідпис", callback_data = "watermark_on") if not watermark else InlineKeyboardButton(f"Прибрати автопідпис ({watermark})", callback_data = "watermark_off")
     ],
     [  
-        InlineKeyboardButton("Автовидалення", callback_data = "autodelete_on") if not data["autodelete"] else InlineKeyboardButton(f"Прибрати автовидалення ({round((data.get('autodelete') - datetime.datetime.now()).total_seconds() / 3600)}h)", callback_data = "autodelete_off")
+        InlineKeyboardButton("Автовидалення", callback_data = "autodelete_on") if not data["autodelete"] else InlineKeyboardButton(f"Прибрати автовидалення ({round((autodelete - datetime.datetime.now()).total_seconds() / 3600)}h)", callback_data = "autodelete_off")
     ],
     [  
         InlineKeyboardButton("Превю: вкл", callback_data = "set_preview") if preview else InlineKeyboardButton(f"Превю: викл", callback_data = "set_preview")
@@ -56,7 +58,6 @@ def get_kb():
         kb.inline_keyboard.insert(1, [InlineKeyboardButton("Відкріпити медіа", callback_data = "disattach_media")])
 
     if data.get('is_editing'):
-        remove_button_by_callback_data('autodelete_on', kb)
         remove_button_by_callback_data('attach_media', kb)
 
     if data.get('is_editing') and len(data.get('media')) > 1:
@@ -746,7 +747,7 @@ async def change_post_data(callback_query: types.CallbackQuery, state: FSMContex
         data.get('media'),
         data.get('autodelete')
     )
-    if is_posted:
+    if is_posted and not isinstance(post, Table):
         await callback_query.message.answer(f'<b><a href="{post.url}">Пост</a> успішно відредаговано</b>', parse_mode = "html")
     else:
         await callback_query.message.answer('Пост відредаговано')
