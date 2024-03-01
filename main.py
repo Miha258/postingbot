@@ -56,7 +56,7 @@ async def back_to_menu(callback_query: types.CallbackQuery, state: FSMContext):
     await state.finish()
     await callback_query.message.answer('Скористайтеся меню:')
 
-@dp.message_handler(lambda m: m.text in ('Створити бота', '/addbot'), state = '*')
+@dp.message_handler(lambda m: m.text in ('Створити бота', '/newbot'), state = '*')
 async def get_bots(message: types.Message, state: FSMContext):
     await state.set_state(BotStates.TYPE)
     kb = ReplyKeyboardMarkup([[KeyboardButton(type) for type in bot_types]], resize_keyboard = True)
@@ -119,6 +119,7 @@ async def edit_bot(callback_query: types.CallbackQuery):
         [InlineKeyboardButton('Повернутися в меню', callback_data = 'back_to_menu')]
     ])
     await callback_query.message.edit_text(f'Виберть дію для {_bot["username"]}:', reply_markup = edit_kb)
+
 
 @dp.callback_query_handler(lambda cb: "delete_bot" in cb.data)
 async def delete_bot(callback_query: types.CallbackQuery):
