@@ -5,7 +5,7 @@ from aiogram.utils.callback_data import CallbackData
 from aiogram import types, Dispatcher
 from aiogram.dispatcher import FSMContext
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-from aiogram.utils.exceptions import BadRequest
+from aiogram.utils.exceptions import BadRequest, Unauthorized
 import re 
 from datetime import datetime
 from states import *
@@ -520,64 +520,67 @@ async def send_post(user_kb: InlineKeyboardMarkup, channel: str = None, _data: d
         text += "\n\n" + watermark
 
     media = post_data.get('media')
-    if media:
-        if isinstance(media, str):
-            if '|' in media:
-                post_data['media'] = post_data['media'].split('|')
-            else:
-                post_data['media'] = [media]
-            media = post_data.get('media')
-        if len(media) == 1:
-            media = media[0]
-            media_type = type(media)
-            match media_type:
-                case types.PhotoSize:
-                    post = await bot.send_photo(channel, media.file_id, caption = text, parse_mode = parse_mode, reply_markup = user_kb, disable_notification = disable_notification)
-                case types.Video:
-                    post = await bot.send_video(channel, media.file_id, caption = text, parse_mode = parse_mode, reply_markup = user_kb, disable_notification = disable_notification) 
-                case types.Animation:
-                    post = await bot.send_animation(channel, media.file_id, caption = text, parse_mode = parse_mode, reply_markup = user_kb, disable_notification = disable_notification) 
-                case _:
-                    file_type, file_id = media.split('/')
-                    match file_type:
-                        case 'photos':
-                            post = await bot.send_photo(channel, file_id, caption = text, parse_mode = parse_mode, reply_markup = user_kb, disable_notification = disable_notification)
-                        case 'videos':
-                            post = await bot.send_video(channel, file_id, caption = text, parse_mode = parse_mode, reply_markup = user_kb, disable_notification = disable_notification)
-                        case 'animations':
-                            post = await bot.send_animation(channel, file_id, caption = text, parse_mode = parse_mode, reply_markup = user_kb, disable_notification = disable_notification,)
-        elif len(media) > 1:
-            media_group = types.MediaGroup()
-            for content in media:
-                media_type = type(content)
+    try:
+        if media:
+            if isinstance(media, str):
+                if '|' in media:
+                    post_data['media'] = post_data['media'].split('|')
+                else:
+                    post_data['media'] = [media]
+                media = post_data.get('media')
+            if len(media) == 1:
+                media = media[0]
+                media_type = type(media)
                 match media_type:
                     case types.PhotoSize:
-                        media_group.attach_photo(content.file_id)
+                        post = await bot.send_photo(channel, media.file_id, caption = text, parse_mode = parse_mode, reply_markup = user_kb, disable_notification = disable_notification)
                     case types.Video:
-                        media_group.attach_video(content.file_id)
+                        post = await bot.send_video(channel, media.file_id, caption = text, parse_mode = parse_mode, reply_markup = user_kb, disable_notification = disable_notification) 
+                    case types.Animation:
+                        post = await bot.send_animation(channel, media.file_id, caption = text, parse_mode = parse_mode, reply_markup = user_kb, disable_notification = disable_notification) 
                     case _:
-                        file_type, file_id = content.split('/')
+                        file_type, file_id = media.split('/')
                         match file_type:
                             case 'photos':
-                                media_group.attach_photo(file_id, parse_mode = post_data.get('parse_mode'))
+                                post = await bot.send_photo(channel, file_id, caption = text, parse_mode = parse_mode, reply_markup = user_kb, disable_notification = disable_notification)
                             case 'videos':
-                                media_group.attach_video(file_id, parse_mode = post_data.get('parse_mode'))
+                                post = await bot.send_video(channel, file_id, caption = text, parse_mode = parse_mode, reply_markup = user_kb, disable_notification = disable_notification)
+                            case 'animations':
+                                post = await bot.send_animation(channel, file_id, caption = text, parse_mode = parse_mode, reply_markup = user_kb, disable_notification = disable_notification,)
+            elif len(media) > 1:
+                media_group = types.MediaGroup()
+                for content in media:
+                    media_type = type(content)
+                    match media_type:
+                        case types.PhotoSize:
+                            media_group.attach_photo(content.file_id)
+                        case types.Video:
+                            media_group.attach_video(content.file_id)
+                        case _:
+                            file_type, file_id = content.split('/')
+                            match file_type:
+                                case 'photos':
+                                    media_group.attach_photo(file_id, parse_mode = post_data.get('parse_mode'))
+                                case 'videos':
+                                    media_group.attach_video(file_id, parse_mode = post_data.get('parse_mode'))
 
-            if not post_data.get('url_buttons') and not post_data.get('hidden_extension_btn'):
-                media_group.media[-1].caption = text
-                post = (await bot.send_media_group(channel, media_group, disable_notification = disable_notification))[-1]
-            else:
-                await bot.send_media_group(channel, media_group, disable_notification = disable_notification)
-                post = await bot.send_message(channel, text, parse_mode = parse_mode, reply_markup = user_kb, disable_notification = disable_notification)
-    else:
-        post = await bot.send_message(channel, text, parse_mode = parse_mode, reply_markup = user_kb, disable_notification = disable_notification)
+                if not post_data.get('url_buttons') and not post_data.get('hidden_extension_btn'):
+                    media_group.media[-1].caption = text
+                    post = (await bot.send_media_group(channel, media_group, disable_notification = disable_notification))[-1]
+                else:
+                    await bot.send_media_group(channel, media_group, disable_notification = disable_notification)
+                    post = await bot.send_message(channel, text, parse_mode = parse_mode, reply_markup = user_kb, disable_notification = disable_notification)
+        else:
+            post = await bot.send_message(channel, text, parse_mode = parse_mode, reply_markup = user_kb, disable_notification = disable_notification)
     
-    if post_data.get("comments"):
-        await asyncio.sleep(5)
-        chat_url = (await bot.get_chat(channel)).linked_chat_id
-        chat = await bot.get_chat(chat_url)
-        await chat.pinned_message.delete()
-    return post 
+        if post_data.get("comments"):
+            await asyncio.sleep(5)
+            chat_url = (await bot.get_chat(channel)).linked_chat_id
+            chat = await bot.get_chat(chat_url)
+            await chat.pinned_message.delete()
+        return post
+    except Unauthorized:
+        raise Unauthorized
     
 
 async def cancle_post(callback_query: types.CallbackQuery, state: FSMContext):
@@ -587,32 +590,37 @@ async def cancle_post(callback_query: types.CallbackQuery, state: FSMContext):
 
 
 async def create_post(callback_query: types.CallbackQuery, state: FSMContext):
-    user_kb = get_user_kb(data)
-    message = callback_query.message
-    channel = get_channel()
-    post = await send_post(user_kb)
-    media = data.get('media')
-    await message.answer(f'<b><a href="{post.url}">Пост</a> успішно опублікований!</b>', parse_mode = 'html', reply_markup = make_new_post_kb)
-    await Posts.save_post(
-        post.message_id,
-        bot.id,
-        channel,
-        data.get('text'),
-        data.get("hidden_extension_text_1"),
-        data.get("hidden_extension_text_2"),
-        data.get("hidden_extension_btn"),
-        data.get("url_buttons"),
-        data.get("parse_mode"),
-        data.get('comments'),
-        notify,
-        data.get('watermark'),
-        data.get('delay') or datetime.datetime.now().replace(microsecond = 0),
-        media,
-        data.get('autodelete'),
-        is_published = True
-    )
-    data.clear()
-    await state.finish()
+    try:
+        user_kb = get_user_kb(data)
+        message = callback_query.message
+        channel = get_channel()
+        post = await send_post(user_kb)
+        media = data.get('media')
+        await message.answer(f'<b><a href="{post.url}">Пост</a> успішно опублікований!</b>', parse_mode = 'html', reply_markup = make_new_post_kb)
+    
+        await Posts.save_post(
+            post.message_id,
+            bot.id,
+            channel,
+            data.get('text'),
+            data.get("hidden_extension_text_1"),
+            data.get("hidden_extension_text_2"),
+            data.get("hidden_extension_btn"),
+            data.get("url_buttons"),
+            data.get("parse_mode"),
+            data.get('comments'),
+            notify,
+            data.get('watermark'),
+            data.get('delay') or datetime.datetime.now().replace(microsecond = 0),
+            media,
+            data.get('autodelete'),
+            is_published = True
+        )
+    except Unauthorized:
+        await callback_query.answer('Схоже я не являюся учасником каналу, в який ви хочете надіслати пост.Спробуйте інший канал')
+    else:
+        data.clear()
+        await state.finish()
 
 
 async def notification_handler(callback_query: types.CallbackQuery, state: FSMContext):
