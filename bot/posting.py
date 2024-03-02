@@ -366,13 +366,17 @@ async def remove_watermark_handler(callback_query: types.CallbackQuery, state: F
     await state.set_state(BotStates.EDITING_POST)
 
 
-async def set_autodelete_handler(callback_query: types.CallbackQuery, state: FSMContext):  
-    autodelete = datetime.datetime.now() + datetime.timedelta(hours = int(callback_query.data.split('_')[-1]))
-    autodelete = autodelete.replace(microsecond = 0)
-    data['autodelete'] = autodelete
-    message = callback_query.message
-    await send_editible_template(message)
-    await state.set_state(BotStates.EDITING_POST)
+async def set_autodelete_handler(callback_query: types.CallbackQuery, state: FSMContext):
+    hours = callback_query.data.split('_')[-1]
+    if hours.isdigit():
+        autodelete = datetime.datetime.now() + datetime.timedelta(hours = int(hours))
+        autodelete = autodelete.replace(microsecond = 0)
+        data['autodelete'] = autodelete
+        message = callback_query.message
+        await send_editible_template(message)
+        await state.set_state(BotStates.EDITING_POST)
+    else:
+        await callback_query.answer('Виникла помилка при виборі часу, спробуйте повернутися назад', show_alert = True)
 
 
 async def remove_autodelete_handler(callback_query: types.CallbackQuery, state: FSMContext):  

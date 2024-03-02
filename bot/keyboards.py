@@ -125,7 +125,10 @@ def get_calendar(month: int = 0):
         date = date.replace(year = date.year + 1) 
     
     start = 1 if month else date.day
-    end = calendar.monthrange(date.year, date.month + month)[1]
+    try:
+        end = calendar.monthrange(date.year, date.month + month)[1]
+    except calendar.IllegalMonthError:
+        end = calendar.monthrange(date.year, date.month)[1]
     for day in range(start, end + 1):
         inline_markup.insert(InlineKeyboardButton(str(day), callback_data = f"calendar_day:{date.year}-{date.month + month}-{day}"))
     
