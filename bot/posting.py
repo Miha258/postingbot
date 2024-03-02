@@ -580,7 +580,7 @@ async def send_post(user_kb: InlineKeyboardMarkup, channel: str = None, _data: d
             await chat.pinned_message.delete()
         return post
     except Unauthorized:
-        raise Unauthorized
+        raise Unauthorized('Bot is not chat participant')
     
 
 async def cancle_post(callback_query: types.CallbackQuery, state: FSMContext):
