@@ -617,7 +617,7 @@ async def create_post(callback_query: types.CallbackQuery, state: FSMContext):
             is_published = True
         )
     except Unauthorized:
-        await callback_query.answer('Схоже я не являюся учасником каналу, в який ви хочете надіслати пост.Спробуйте інший канал')
+        await callback_query.answer('Схоже я не являюся учасником каналу, в який ви хочете надіслати пост.Спробуйте інший канал', show_alert = True)
     else:
         data.clear()
         await state.finish()
