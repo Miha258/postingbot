@@ -97,7 +97,7 @@ async def process_newbot_token(message: types.Message, state: FSMContext):
     bots =  [_bot["token"] for _bot in await Bots.get("user_id", message.from_id, True)] if bots else []
 
     if not check_token(new_bot_token):
-        return await message.reply('Невірний токен.Спробуйие ще раз:') 
+        return await message.reply('Невірний токен.Спробуйте ще раз:') 
     
     elif message.text in bots:
         return await message.reply('Такий токен вже зарєстровано.Спробуйте інший') 
