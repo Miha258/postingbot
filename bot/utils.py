@@ -25,7 +25,8 @@ async def fetch_media_bytes(url):
 class IsAdminFilter(BoundFilter):
     async def check(self, message: Message) -> bool:
         return message.from_user.id == int(owner)
-    
+
+
 class IsChannel(BoundFilter):
     async def check(self, message: Message) -> bool:
         if get_channel():
@@ -33,3 +34,6 @@ class IsChannel(BoundFilter):
         else:
             await message.answer('Ви не вибрали канал, скористайтеся меню, щоб це зробити:')
             return False
+        
+
+find_media_type = lambda string: [t for t in ('photos', 'videos', 'animations') if t in string][0]

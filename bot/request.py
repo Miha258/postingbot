@@ -155,7 +155,9 @@ async def join_request_handler(request: types.ChatJoinRequest):
     else:
         channels[channel_id] = {"requests": [request], "type": "off"}
     if channel:
+
         request_type = channel["type"]
+        print(request_type)
         match request_type:
             case "off":
                 channel["requests"].append(request)

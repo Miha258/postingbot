@@ -1,6 +1,7 @@
 from .main import DB
 import asyncio
 from datetime import datetime
+from utils import find_media_type
 
 loop = asyncio.get_event_loop()
 posting = loop.run_until_complete(DB("posting.db")())
@@ -110,8 +111,6 @@ class Posts(Table):
         autodelete: datetime = None,
         is_published: bool = None
     ):  
-        
-        find_media_type = lambda string: [t for t in ('photos', 'videos', 'animations') if t in string][0]
         url_buttons = "".join([ "".join([b.text + " - " + b.url + ("\n" if len(btn) == i else " | ") for i, b in enumerate(btn, 1)]) if isinstance(btn, list) else btn.text + " - " + btn.url + "\n" for btn in url_buttons])
         media = "|".join([ find_media_type(await content.get_url()) + f'/{content.file_id}' for content in media ]) if media else None 
         await cls(id, 
@@ -145,8 +144,14 @@ class Posts(Table):
         notify: bool = None,
         watermark: str = None,
         media: str = None,
-        autodelete: datetime = None
+        autodelete: datetime = None,
+        delay: datetime = None
     ):
+        
+        if delay:
+            await cls.update("id", id, delay = delay)
+            return
+        
         url_buttons = "".join([ "".join([b.text + " - " + b.url + ("\n" if len(btn) == i else " | ") for i, b in enumerate(btn, 1)]) if isinstance(btn, list) else btn.text + " - " + btn.url + "\n" for btn in url_buttons])
         if media:
             if len(media) > 1:
@@ -168,7 +173,8 @@ class Posts(Table):
             notify = notify,
             watermark = watermark,
             media = media,
-            autodelete = autodelete
+            autodelete = autodelete,
+            delay = delay
         )
 
 class Greetings(Table):

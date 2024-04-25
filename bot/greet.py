@@ -3,13 +3,15 @@ from aiogram.dispatcher import Dispatcher
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, KeyboardButton, ReplyKeyboardMarkup
 from aiogram.dispatcher import FSMContext
 from states import BotStates, CustomGreetSatates
-from utils import *
+from utils import IsAdminFilter, IsChannel
 from create_bot import bot, get_channel, storage
 import re
 import asyncio
+from aiogram.utils.exceptions import BadRequest
 from db.account import Bots, Users, Greetings, Channels
 from chatgpt import *
 from keyboards import edit_capcha_kb
+from utils import find_media_type
 
 channels = {}
 options = {
@@ -264,12 +266,14 @@ async def send_custom_greet_to_user(user_id: int):
                         name, url =  button.split(' - ')
                         kb.add(InlineKeyboardButton(name, url))
             if media:
-                file = await fetch_media_bytes(media)
-                is_video = types.InputMediaVideo(file).duration
-                if is_video:
-                    msg = await bot.send_video(user_id, file, greet_text, reply_markup = kb, parse_mode = 'html') 
-                elif not is_video:
-                    msg = await bot.send_photo(user_id, file, greet_text, reply_markup = kb, parse_mode = 'html') 
+                file_type, file_id = media.split('|')
+                match file_type:
+                    case 'videos':
+                        msg = await bot.send_video(user_id, file_id, greet_text, reply_markup = kb, parse_mode = 'html') 
+                    case 'photos':
+                        msg = await bot.send_photo(user_id, file_id, greet_text, reply_markup = kb, parse_mode = 'html') 
+                    case 'animations':
+                        msg = await bot.send_animation(user_id, file_id, greet_text, reply_markup = kb, parse_mode = 'html') 
             else:
                 msg = await bot.send_message(user_id, greet_text, reply_markup = kb, parse_mode = 'html')
             
@@ -298,14 +302,17 @@ async def greeting_request_handler(request: types.ChatJoinRequest):
                         
 
 async def add_custom_greet(callback_query: types.CallbackQuery, state: FSMContext):
-    await callback_query.message.answer("Надішліть текст та фото/відео:")
+    await callback_query.message.answer("Надішліть текст та фото/відео/гіфку:")
     await state.set_state(CustomGreetSatates.MEDIA)
 
 
 async def custom_greet_buttons(message: types.Message, state: FSMContext):
-    await state.update_data({'greet_text': message.caption or message.html_text, 'media': message.photo[-1] if message.photo else message.video})
-    await message.answer("Введіть кнопку у форматі: \n<em>1. Кнопка - посилання</em>\n<em>2. Кнопка - посилання</em>\n<em>3. Кнопка - посилання</em>",parse_mode = "html")
-    await state.set_state(CustomGreetSatates.BUTTONS)
+    try:
+        await state.update_data({'greet_text': message.caption or message.html_text, 'media': message.photo[-1] if message.photo else message.video or message.animation })
+        await message.answer("Введіть кнопку у форматі: \n<em>1. Кнопка - посилання</em>\n<em>2. Кнопка - посилання</em>\n<em>3. Кнопка - посилання</em>",parse_mode = "html")
+        await state.set_state(CustomGreetSatates.BUTTONS)
+    except TypeError:
+        await message.answer("Потрібно надіслати разом з тескстом або просто текст:",parse_mode = "html")
 
 
 async def procces_custom_greet(message: types.Message, state: FSMContext):
@@ -324,10 +331,10 @@ async def procces_custom_greet(message: types.Message, state: FSMContext):
     
     async with state.proxy() as data:
         greet_text = data['greet_text']
-        media: types.PhotoSize | types.Video = data['media']
+        media: types.PhotoSize | types.Video | types.Animation = data['media']
         media_data = None
         if media:
-            media_data = await media.get_url()
+            media_data = media.mime_type + '/' + media.file_id
         await Greetings(message.message_id, bot_id = bot.id, greet_text = greet_text, channel_id = get_channel(), autodelete = 0, delay = 0, buttons = buttons, image = media_data)()
         await message.answer(
         """
@@ -346,16 +353,22 @@ async def edit_custom_greet(callback_query: types.CallbackQuery, state: FSMConte
     data = callback_query.data
     greet_id = int(data.split('_')[-1])
     greet = (await Greetings.get('id', greet_id)).data
-    media = greet.get('image')
-    text = greet.get('greet_text')
-    if media:
-        file = await fetch_media_bytes(media)
-        is_video = types.InputMediaVideo(file).duration
-        if is_video:
-            await callback_query.message.answer_video(file, text, reply_markup = await edit_custom_greating_kb(greet_id), parse_mode = 'html') 
-        elif not is_video:
-            await callback_query.message.answer_photo(file, text, reply_markup = await edit_custom_greating_kb(greet_id), parse_mode = 'html') 
-    else:
+    media = greet['image']
+    text = greet['greet_text']
+    try:
+        if media:
+            file_type, file_id = media.split('/')
+            match file_type:
+                case 'videos':
+                    await callback_query.message.answer_video(file_id, caption = text, reply_markup = await edit_custom_greating_kb(greet_id), parse_mode = 'html') 
+                case 'photos':
+                    await callback_query.message.answer_photo(file_id, caption = text, reply_markup = await edit_custom_greating_kb(greet_id), parse_mode = 'html') 
+                case 'animations':
+                    await callback_query.message.answer_animation(file_id, caption = text, reply_markup = await edit_custom_greating_kb(greet_id), parse_mode = 'html') 
+        else:
+            await callback_query.message.answer(text, reply_markup = await edit_custom_greating_kb(greet_id))
+    except BadRequest:
+        await callback_query.answer('Невдалося завантажити медіа файл привітання', show_alert = True)
         await callback_query.message.answer(text, reply_markup = await edit_custom_greating_kb(greet_id))
     await state.set_state(CustomGreetSatates.GREET_EDITING)
 
@@ -363,9 +376,9 @@ async def edit_custom_greet_handler(callback_query: types.CallbackQuery, state: 
     data = callback_query.data
     greet_id = int(data.split('_')[-1])
     message = callback_query.message
-    media = message.photo[-1] if message.photo else message.video
+    media = message.photo[-1] if message.photo else message.animation or message.video
     await state.set_data({'greet_id': greet_id})
-
+    
     data = data.split('_')[:-1]
     action = "_".join(data)
     
@@ -397,7 +410,7 @@ async def edit_custom_greet_handler(callback_query: types.CallbackQuery, state: 
         case 'delete_greet':
             await delete_greet(callback_query, state)
         case "edit_custom_greet_media":
-            await message.answer("Введіть фото/відео:", reply_markup = back_to_custom_greet_menu_kb(greet_id))
+            await message.answer("Введіть фото/відео/гіфку:", reply_markup = back_to_custom_greet_menu_kb(greet_id))
             await state.set_state(CustomGreetSatates.EDIT_MEDIA)
         case 'stop_editing_greet':
             await message.answer(
@@ -478,22 +491,23 @@ async def edit_greet_text(message: types.Message, state: FSMContext):
     media = greet.data.get('image')
 
     if media:
-        file = await fetch_media_bytes(media)
-        is_video = types.InputMediaVideo(file).duration
-        if is_video:
-            await message.answer_video(file, message.html_text, reply_markup = await edit_custom_greating_kb(greet_id))
-        elif not is_video:
-            await message.answer_photo(file, message.html_text, reply_markup = await edit_custom_greating_kb(greet_id))     
+        file_type, file_id = media.split('/')
+        match file_type:
+            case 'videos':
+                await message.answer_video(file_id, caption = message.html_text, reply_markup = await edit_custom_greating_kb(greet_id))
+            case 'photos':
+                await message.answer_photo(file_id, caption = message.html_text, reply_markup = await edit_custom_greating_kb(greet_id))     
+            case 'animations':
+                await message.answer_animation(file_id, caption = message.html_text, reply_markup = await edit_custom_greating_kb(greet_id))     
     else:
         await message.answer(message.html_text, reply_markup = await edit_custom_greating_kb(greet_id))
-
     await state.set_state(CustomGreetSatates.GREET_EDITING)
 
 
 async def edit_greet_media(message: types.Message, state: FSMContext):
     greet_id = (await state.get_data())['greet_id']
-    media = message.photo[-1] if message.photo else message.video
-    greet = await Greetings.update('id', greet_id, image = await media.get_url())
+    media = message.photo[-1] if message.photo else message.animation or message.video
+    greet = await Greetings.update('id', greet_id, image = find_media_type(await media.get_url()) + '/' + media.file_id)
 
     if isinstance(media, types.PhotoSize):
         await message.answer_photo(media.file_id, greet['greet_text'], reply_markup = await edit_custom_greating_kb(greet_id))
@@ -526,7 +540,7 @@ def register_greet(dp: Dispatcher):
     dp.register_callback_query_handler(edit_capcha, lambda cb: cb.data in 'edit_capcha')
     dp.register_callback_query_handler(change_bot_checking_status, lambda cb: cb.data in ('set_capcha_status', 'back_to_custom_capcha_menu'), state = "*")
     dp.register_message_handler(update_bot_checking_text, state = BotStates.EDITING_CAPCHA)
-    dp.register_message_handler(custom_greet_buttons, state = CustomGreetSatates.MEDIA, content_types = types.ContentTypes.TEXT | types.ContentTypes.PHOTO | types.ContentTypes.VIDEO)
+    dp.register_message_handler(custom_greet_buttons, state = CustomGreetSatates.MEDIA, content_types = types.ContentTypes.TEXT | types.ContentTypes.PHOTO | types.ContentTypes.VIDEO | types.ContentTypes.ANIMATION)
     dp.register_message_handler(procces_custom_greet, state = CustomGreetSatates.BUTTONS)
     dp.register_callback_query_handler(edit_custom_greet, lambda cb: "edit_custom_greet" in cb.data)
     dp.register_callback_query_handler(edit_custom_greet_handler, state = CustomGreetSatates.GREET_EDITING)

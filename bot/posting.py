@@ -5,7 +5,7 @@ from aiogram.utils.callback_data import CallbackData
 from aiogram import types, Dispatcher
 from aiogram.dispatcher import FSMContext
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-from aiogram.utils.exceptions import BadRequest, Unauthorized
+from aiogram.utils.exceptions import BadRequest, Unauthorized, TelegramAPIError
 import re 
 from datetime import datetime
 from states import *
@@ -24,7 +24,6 @@ def get_kb():
             watermark = watermark.group(1)
 
     autodelete = datetime.datetime.strptime(data.get('autodelete'), '%Y-%m-%d %H:%M:%S') if isinstance(data.get('autodelete'), str) else data.get('autodelete')
-    print(type(autodelete))
     kb = InlineKeyboardMarkup(inline_keyboard = [
     [
         InlineKeyboardButton("Змінити текст", callback_data = "edit_text"),
@@ -47,13 +46,14 @@ def get_kb():
     [  
         InlineKeyboardButton("Превю: вкл", callback_data = "set_preview") if preview else InlineKeyboardButton(f"Превю: викл", callback_data = "set_preview")
     ],
-    [InlineKeyboardButton("Відредагувати", callback_data = "change_post_data")] if data.get('is_editing') else [
+    [InlineKeyboardButton("Відредагувати", callback_data = "change_post_data"), 
+     InlineKeyboardButton("Опублікувати", callback_data = "create_post"),
+        InlineKeyboardButton("Видалити", callback_data = f"delete_post_{data.get('id')}"),] if data.get('is_editing') else [
         InlineKeyboardButton("Відкласти", callback_data = "delay_post"),
         InlineKeyboardButton("Опублікувати", callback_data = "create_post")
     ]
     ])
     kb.add(back_btn)
-
     if data.get('media'):
         kb.inline_keyboard.insert(1, [InlineKeyboardButton("Відкріпити медіа", callback_data = "disattach_media")])
 
@@ -70,8 +70,9 @@ def get_kb():
     if data.get('is_editing') and not data.get('media'):
         remove_button_by_callback_data('attach_media', kb)
 
-    if data.get('datetime'):
+    if data.get('datetime') and data.get('is_published'):
         remove_button_by_callback_data('create_post', kb)
+        remove_button_by_callback_data(f"delete_post_{data.get('id')}", kb)
     
     if not data.get('is_editing'):
         kb.inline_keyboard.insert(len(kb.inline_keyboard) - 1,[
@@ -172,9 +173,10 @@ async def send_editible_template(message: types.Message):
 
 async def process_new_post(message: types.Message, state: FSMContext):
     await state.finish()
+    channel = await Channels.get('chat_id', get_channel())
     data.clear()
     data["text"] = None
-    data["watermark"] = (await Channels.get('chat_id', get_channel()))['watermark']
+    data["watermark"] = channel['watermark'] if channel else None
     data["comments"] = False
     data["url_buttons"] = []
     data["parse_mode"] = types.ParseMode.HTML
@@ -581,6 +583,7 @@ async def send_post(user_kb: InlineKeyboardMarkup, channel: str = None, _data: d
         return post
     except Unauthorized:
         raise Unauthorized('Bot is not chat participant')
+
     
 
 async def cancle_post(callback_query: types.CallbackQuery, state: FSMContext):
@@ -591,13 +594,17 @@ async def cancle_post(callback_query: types.CallbackQuery, state: FSMContext):
 
 async def create_post(callback_query: types.CallbackQuery, state: FSMContext):
     try:
+        if data.get('is_editing') and not data.get('is_published'):
+            await Posts.edit_post(data.get('id'), delay = datetime.datetime.now().replace(microsecond = 0))
+            await callback_query.message.answer(f'Пост успішно опублікований!')
+            return 
+
         user_kb = get_user_kb(data)
         message = callback_query.message
         channel = get_channel()
         post = await send_post(user_kb)
         media = data.get('media')
         await message.answer(f'<b><a href="{post.url}">Пост</a> успішно опублікований!</b>', parse_mode = 'html', reply_markup = make_new_post_kb)
-    
         await Posts.save_post(
             post.message_id,
             bot.id,
@@ -618,6 +625,8 @@ async def create_post(callback_query: types.CallbackQuery, state: FSMContext):
         )
     except Unauthorized:
         await callback_query.answer('Схоже я не являюся учасником каналу, в який ви хочете надіслати пост.Спробуйте інший канал', show_alert = True)
+    except TelegramAPIError:
+        await callback_query.answer("Виникла невідома проблема при створені поста.Ми будемо вдячні, якщо повідомите нас про вашу проблему", show_alert = True)
     else:
         data.clear()
         await state.finish()
@@ -643,6 +652,16 @@ async def create_post_again(callback_query: types.CallbackQuery, state: FSMConte
 async def choose_post_for_edit(message: types.Message, state: FSMContext):
     await state.set_state(BotStates.CHANGE_POST)
     await message.answer('Перешліть мені пост, який бажаєте відредагувати:', reply_markup = back_to_menu())
+
+
+
+async def delete_post(callback_data: types.CallbackQuery):
+    print(123)
+    post_id = int(callback_data.data.split('_')[-1])
+    await Posts.delete(post_id)
+    
+    await callback_data.message.answer('Пост успішно видалений з контент плану!')
+    await callback_data.message.delete()
 
 
 async def edit_post(message: types.Message, state: FSMContext, post_id: int = None):
@@ -797,6 +816,7 @@ def register_posting(dp: Dispatcher):
     dp.register_callback_query_handler(set_preview, lambda cb: cb.data == 'set_preview', state = "*")
     dp.register_callback_query_handler(back_to_editing, lambda cb: "back_to_edit" == cb.data, state = "*")
     dp.register_message_handler(choose_post_for_edit, lambda m: m.text == 'Редагувати пост', IsAdminFilter(), state = '*')
+    dp.register_callback_query_handler(delete_post, lambda cb: "delete_post" in cb.data, state = BotStates.EDITING_POST)
     dp.register_message_handler(edit_post, state = BotStates.CHANGE_POST, content_types = [types.ContentType.TEXT, types.ContentType.VIDEO, types.ContentType.PHOTO, types.ContentType.ANIMATION])
     dp.register_callback_query_handler(change_post_data, lambda cb: "change_post_data" in cb.data, state = BotStates.EDITING_POST)
     dp.register_callback_query_handler(edit_post_command, state = BotStates.EDITING_POST)
