@@ -1,7 +1,7 @@
 from .main import DB
 import asyncio
 from datetime import datetime
-from utils import find_media_type
+from ..utils import find_media_type
 
 loop = asyncio.get_event_loop()
 posting = loop.run_until_complete(DB("posting.db")())
