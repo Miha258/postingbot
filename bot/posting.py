@@ -14,7 +14,6 @@ from keyboards import *
 from db.account import Posts, Channels, Table
 
 data = {}
-preview = True
 notify = True
 def get_kb():
     watermark = data.get('watermark')
@@ -41,10 +40,10 @@ def get_kb():
         InlineKeyboardButton("Додати автопідпис", callback_data = "watermark_on") if not watermark else InlineKeyboardButton(f"Прибрати автопідпис ({watermark})", callback_data = "watermark_off")
     ],
     [  
-        InlineKeyboardButton("Автовидалення", callback_data = "autodelete_on") if not data["autodelete"] else InlineKeyboardButton(f"Прибрати автовидалення ({round((autodelete - datetime.datetime.now()).total_seconds() / 3600)}h)", callback_data = "autodelete_off")
+        InlineKeyboardButton("Автовидалення", callback_data = "autodelete_on") if not data.get("autodelete") else InlineKeyboardButton(f"Прибрати автовидалення ({round((autodelete - datetime.datetime.now()).total_seconds() / 3600)}h)", callback_data = "autodelete_off")
     ],
     [  
-        InlineKeyboardButton("Превю: вкл", callback_data = "set_preview") if preview else InlineKeyboardButton(f"Превю: викл", callback_data = "set_preview")
+        InlineKeyboardButton("Превю: вкл", callback_data = "set_preview") if data.get('preview') else InlineKeyboardButton(f"Превю: викл", callback_data = "set_preview")
     ],
     [InlineKeyboardButton("Відредагувати", callback_data = "change_post_data"), 
      InlineKeyboardButton("Опублікувати", callback_data = "create_post"),
@@ -70,6 +69,9 @@ def get_kb():
     if data.get('is_editing') and not data.get('media'):
         remove_button_by_callback_data('attach_media', kb)
 
+    if data.get('delay'):
+        remove_button_by_callback_data('create_post', kb)
+
     if data.get('datetime') and data.get('is_published'):
         remove_button_by_callback_data('create_post', kb)
         remove_button_by_callback_data(f"delete_post_{data.get('id')}", kb)
@@ -94,35 +96,35 @@ def get_kb():
             remove_button_by_callback_data("disattach_media", kb)
             kb.inline_keyboard.insert(0, [InlineKeyboardButton("Замінити медіа", callback_data = "attach_media")])
     url_buttons = data.get("url_buttons")
-    if preview:
-        if url_buttons:
-            row_btns = []
-            column_buttons = 0
-            for btn in url_buttons:
-                if isinstance(btn, list):
-                    kb.inline_keyboard.insert(column_buttons, btn)
-                    column_buttons += 1
-                elif isinstance(btn, InlineKeyboardButton):
-                    row_btns.append(btn)
-            if row_btns:
-                kb.inline_keyboard.insert(0, row_btns)
+    if url_buttons:
+        row_btns = []
+        column_buttons = 0
+        for btn in url_buttons:
+            if isinstance(btn, list):
+                kb.inline_keyboard.insert(column_buttons, btn)
+                column_buttons += 1
+            elif isinstance(btn, InlineKeyboardButton):
+                row_btns.append(btn)
+        if row_btns:
+            kb.inline_keyboard.insert(0, row_btns)
 
-            kb.inline_keyboard.insert(len(url_buttons), [
-                InlineKeyboardButton("Прибрати URL-кнопки", callback_data = "remove_url_buttons")
-            ])
+        kb.inline_keyboard.insert(len(url_buttons), [
+            InlineKeyboardButton("Прибрати URL-кнопки", callback_data = "remove_url_buttons")
+        ])
         
     if data.get("hidden_extension_btn"):
         kb.inline_keyboard.insert(len(url_buttons), [
             InlineKeyboardButton("Видалити приховане продовження", callback_data = "hidden_extension_remove")
         ]) 
-        if preview:
+        if data.get('preview'):
             kb.inline_keyboard.insert(len(url_buttons), [
                 InlineKeyboardButton(data["hidden_extension_btn"], callback_data = "hidden_extension_use")
             ]) 
     else:
-        kb.inline_keyboard.insert(len(url_buttons),  [
-             InlineKeyboardButton("Приховане продовження", callback_data = "hidden_extension")
-        ]) 
+        if url_buttons:
+            kb.inline_keyboard.insert(len(url_buttons),  [
+                InlineKeyboardButton("Приховане продовження", callback_data = "hidden_extension")
+            ]) 
     return kb
 
 async def send_editible_template(message: types.Message):
@@ -168,10 +170,11 @@ async def send_editible_template(message: types.Message):
                         case 'animations':
                             await message.answer_animation(file_id, caption = data["text"], parse_mode = data.get("parse_mode"), reply_markup = kb)
     else:
-        await message.answer(data["text"], parse_mode = data.get("parse_mode"), reply_markup = kb)
+        if data.get("text"):
+            await message.answer(data["text"], parse_mode = data.get("parse_mode"), reply_markup = kb, disable_web_page_preview = data.get('preview'))
 
 
-async def process_new_post(message: types.Message, state: FSMContext):
+async def process_new_post(message: types.Message, state: FSMContext, delay: datetime.datetime = None):
     await state.finish()
     channel = await Channels.get('chat_id', get_channel())
     data.clear()
@@ -183,6 +186,7 @@ async def process_new_post(message: types.Message, state: FSMContext):
     data["media"] = []
     data["autodelete"] = None
     data["datetime"] = (await state.get_data()).get('datetime')
+    data["delay"] = delay
     await message.answer("Надішліть текст, картику або відео поста")
     await state.set_state(EditStates.EDITING_TEXT)
     
@@ -228,11 +232,11 @@ async def edit_post_command(callback_query: types.CallbackQuery, state: FSMConte
             await notification_handler(callback_query, state) 
         case "delay_post": 
             await state.set_state(EditStates.DATE)    
-            date_time = data.get("datetime")
+            date_time = data.get("datetime") or data.get("delay")
             if date_time:
                 await delay_post_handler(message, state)
             else:
-                await message.answer("Введіть час у форматі і виберіть дату: <b>00:00</b>", parse_mode = "html", reply_markup = get_calendar().add(back_to_edit.inline_keyboard[0][0]))     
+                await message.answer("Введіть час у форматі і виберіть дату: <b>00:00</b> або <b>00:00</b>", parse_mode = "html", reply_markup = get_calendar().add(back_to_edit.inline_keyboard[0][0]))     
         case "create_post":
             await state.set_state(EditStates.COMFIRM)
             await message.answer('Підтвердіть публікацію:', reply_markup = confirm_post_kb)  
@@ -281,13 +285,13 @@ async def attaching_media_handler(message: types.Message, state: FSMContext):
 
 
 async def set_preview(callback_query: types.CallbackQuery):
-    global preview
-    if preview:
-        preview = False
-    else:
-        preview = True
-    kb = get_kb()
-    await callback_query.message.edit_reply_markup(reply_markup = kb)
+    if not data.get('media'):
+        if data.get('preview'):
+            data['preview'] = False
+        else:
+            data['preview'] = True
+        kb = get_kb()
+        await callback_query.message.edit_text(data.get("text") + " ", disable_web_page_preview = data.get('preview'), reply_markup = kb)
 
 
 async def disattaching_media_handler(message: types.Message, state: FSMContext):
@@ -452,9 +456,13 @@ async def choose_date_handler(callback_query: types.CallbackQuery):
     
 
 async def delay_post_handler(message: types.Message, state: FSMContext):
+    if data.get('delay'):
+        await state.set_state(EditStates.COMFIRM)
+        await message.answer("Виберіть дію:", reply_markup = confirm_deley_post_kb)
+        return
+    
     date_time = data.get("datetime")
     if not date_time:
-        date_time_regex = r'\d{2}:\d{2}'
         date_string = message.text
         date = data.get("date")
         
@@ -464,8 +472,11 @@ async def delay_post_handler(message: types.Message, state: FSMContext):
             if len(date_string) == 4:
                 date_string = "0" + date_string 
 
-            if re.search(date_time_regex, date_string):
-                time = datetime.datetime.strptime(date_string, "%H:%M").time()
+            if re.search(r'\d{2}:\d{2}', date_string) or re.search(r'\d{2} \d{2}', date_string):
+                if ':' in date_string:
+                    time = datetime.datetime.strptime(date_string, "%H:%M").time()
+                else:
+                    time = datetime.datetime.strptime(date_string, "%H %M").time()
                 date = datetime.datetime.combine(date, time)
                 if date <= datetime.datetime.now():
                     return await message.answer(f"Недійсна дата.Спробуйте ще раз")  
@@ -501,7 +512,8 @@ async def comfirm_delay_post(callback_query: types.CallbackQuery, state: FSMCont
             date,
             media,
             data.get('autodelete'),
-            is_published = False
+            is_published = False,
+            preview = data.get('preview')
         )
         data.clear()
         if date:
@@ -515,6 +527,7 @@ async def send_post(user_kb: InlineKeyboardMarkup, channel: str = None, _data: d
     channel = channel or get_channel()
     post_data = _data if _data else data
     disable_notification = not post_data.get("notify")
+    disable_web_page_preview = post_data.get("preview")
     text = post_data.get('text') or post_data.get('post_text')
     parse_mode = post_data.get("parse_mode")
     watermark = post_data.get('watermark')
@@ -548,7 +561,7 @@ async def send_post(user_kb: InlineKeyboardMarkup, channel: str = None, _data: d
                             case 'videos':
                                 post = await bot.send_video(channel, file_id, caption = text, parse_mode = parse_mode, reply_markup = user_kb, disable_notification = disable_notification)
                             case 'animations':
-                                post = await bot.send_animation(channel, file_id, caption = text, parse_mode = parse_mode, reply_markup = user_kb, disable_notification = disable_notification,)
+                                post = await bot.send_animation(channel, file_id, caption = text, parse_mode = parse_mode, reply_markup = user_kb, disable_notification = disable_notification)
             elif len(media) > 1:
                 media_group = types.MediaGroup()
                 for content in media:
@@ -571,9 +584,9 @@ async def send_post(user_kb: InlineKeyboardMarkup, channel: str = None, _data: d
                     post = (await bot.send_media_group(channel, media_group, disable_notification = disable_notification))[-1]
                 else:
                     await bot.send_media_group(channel, media_group, disable_notification = disable_notification)
-                    post = await bot.send_message(channel, text, parse_mode = parse_mode, reply_markup = user_kb, disable_notification = disable_notification)
+                    post = await bot.send_message(channel, text, parse_mode = parse_mode, reply_markup = user_kb, disable_notification = disable_notification, disable_web_page_preview = disable_web_page_preview)
         else:
-            post = await bot.send_message(channel, text, parse_mode = parse_mode, reply_markup = user_kb, disable_notification = disable_notification)
+            post = await bot.send_message(channel, text, parse_mode = parse_mode, reply_markup = user_kb, disable_notification = disable_notification, disable_web_page_preview = disable_web_page_preview)
     
         if post_data.get("comments"):
             await asyncio.sleep(5)
@@ -584,7 +597,6 @@ async def send_post(user_kb: InlineKeyboardMarkup, channel: str = None, _data: d
     except Unauthorized:
         raise Unauthorized('Bot is not chat participant')
 
-    
 
 async def cancle_post(callback_query: types.CallbackQuery, state: FSMContext):
     message = callback_query.message
@@ -647,7 +659,7 @@ async def back_to_editing(callback_query: types.CallbackQuery, state: FSMContext
 
 async def create_post_again(callback_query: types.CallbackQuery, state: FSMContext):
     await process_new_post(callback_query.message, state)
-    
+
 
 async def choose_post_for_edit(message: types.Message, state: FSMContext):
     await state.set_state(BotStates.CHANGE_POST)
@@ -656,7 +668,6 @@ async def choose_post_for_edit(message: types.Message, state: FSMContext):
 
 
 async def delete_post(callback_data: types.CallbackQuery):
-    print(123)
     post_id = int(callback_data.data.split('_')[-1])
     await Posts.delete(post_id)
     
@@ -790,7 +801,7 @@ async def post_manager():
         posts = await Posts.get("bot_id", bot.id, True)
         if posts:
             for post in posts:
-                # try:
+                try:
                     post_data = post.data 
                     is_published = post_data.get('is_published')
                     if not is_published:
@@ -805,8 +816,8 @@ async def post_manager():
                                 if datetime.datetime.strptime(autodelete, date_format) <= datetime.datetime.now():
                                     await bot.delete_message(post_data["channel_id"], post_data["id"])
                                     await Posts.delete(post_data["id"])
-                # except Exception as e:
-                #     print(e)
+                except Exception as e:
+                    print(e)
         await asyncio.sleep(5)
 
 

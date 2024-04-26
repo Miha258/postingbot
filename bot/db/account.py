@@ -109,7 +109,8 @@ class Posts(Table):
         delay: datetime = None,
         media: list = None,
         autodelete: datetime = None,
-        is_published: bool = None
+        is_published: bool = None,
+        preview: bool = None
     ):  
         url_buttons = "".join([ "".join([b.text + " - " + b.url + ("\n" if len(btn) == i else " | ") for i, b in enumerate(btn, 1)]) if isinstance(btn, list) else btn.text + " - " + btn.url + "\n" for btn in url_buttons])
         media = "|".join([ find_media_type(await content.get_url()) + f'/{content.file_id}' for content in media ]) if media else None 
@@ -128,7 +129,8 @@ class Posts(Table):
             delay = delay,
             media = media,
             autodelete = autodelete,
-            is_published = is_published
+            is_published = is_published,
+            preview = preview
         )()
     @classmethod
     async def edit_post(
