@@ -1,8 +1,9 @@
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardButton, InlineKeyboardMarkup
-from create_bot import bot_type, bot
+from create_bot import bot_type, bot, owner
 import datetime, calendar
 from db.account import Posts
 import datetime
+
 
 back_btn = InlineKeyboardButton('Повернутися в меню', callback_data = "back_to_menu")
 back_to_edit = InlineKeyboardMarkup(inline_keyboard = [
@@ -23,7 +24,7 @@ confirm_deley_post_kb = InlineKeyboardMarkup(inline_keyboard = [
     [InlineKeyboardButton('Відкласти пост', callback_data = 'delay_post')]
 ])
 
-def main_menu():
+def main_menu(user_id: int = None):
     buttons = []
     
     if bot_type == "inviting":
@@ -35,12 +36,16 @@ def main_menu():
         buttons.append(KeyboardButton('Контент-план'))
         buttons.append(KeyboardButton('Редагувати пост'))
 
+
     
     markup = ReplyKeyboardMarkup(resize_keyboard = True, keyboard = [
         buttons,
         [KeyboardButton("Вибрати канал")],
         [KeyboardButton("Тарифи")]
     ])
+    
+    if user_id == int(owner):
+        markup.keyboard.append([KeyboardButton("Назначити адміна")])
     return markup
 
 def back_to_menu():

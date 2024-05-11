@@ -236,7 +236,17 @@ async def edit_post_command(callback_query: types.CallbackQuery, state: FSMConte
             if date_time:
                 await delay_post_handler(message, state)
             else:
-                await message.answer("Введіть час у форматі і виберіть дату: <b>00:00</b> або <b>00:00</b>", parse_mode = "html", reply_markup = get_calendar().add(back_to_edit.inline_keyboard[0][0]))     
+                await message.answer("""
+Введіть час у форматі або виберіть дату: 
+<strong>
+18 01
+18 01 16
+18:01 16 8
+18 01 16.08
+18 01 16.8
+18 01 16 8 2020
+18:01 16.8.2020
+</strong>""", parse_mode = "html", reply_markup = get_calendar().add(back_to_edit.inline_keyboard[0][0]))     
         case "create_post":
             await state.set_state(EditStates.COMFIRM)
             await message.answer('Підтвердіть публікацію:', reply_markup = confirm_post_kb)  
@@ -451,7 +461,6 @@ async def set_calendar_month(callback_query: types.CallbackQuery, state: FSMCont
 
 async def choose_date_handler(callback_query: types.CallbackQuery):
     date = callback_query.data.split(":")[1]
-    data['date'] = datetime.datetime.strptime(date, "%Y-%m-%d").date()
     await callback_query.answer(f"Ви обрали {date}")
     
 
@@ -465,29 +474,16 @@ async def delay_post_handler(message: types.Message, state: FSMContext):
     if not date_time:
         date_string = message.text
         date = data.get("date")
-        
-        if not date:
-            return await message.answer("Ви не вибрали дату")
-        try:
-            if len(date_string) == 4:
-                date_string = "0" + date_string 
-
-            if re.search(r'\d{2}:\d{2}', date_string) or re.search(r'\d{2} \d{2}', date_string):
-                if ':' in date_string:
-                    time = datetime.datetime.strptime(date_string, "%H:%M").time()
-                else:
-                    time = datetime.datetime.strptime(date_string, "%H %M").time()
-                date = datetime.datetime.combine(date, time)
-                if date <= datetime.datetime.now():
-                    return await message.answer(f"Недійсна дата.Спробуйте ще раз")  
-                
-                data["delay"] = date
-                data["delay_str"] = date_string
-                await state.set_state(EditStates.COMFIRM)
-                await message.answer("Виберіть дію:", reply_markup = confirm_deley_post_kb)
-            else:                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  
-                await message.answer("Невірний формат дати.Спробуйте ще раз")
-        except ValueError:
+        date = parse_date(date_string)
+        if date:
+            if date <= datetime.datetime.now():
+                return await message.answer(f"Недійсна дата.Спробуйте ще раз")  
+            
+            data["delay"] = date
+            data["delay_str"] = date_string
+            await state.set_state(EditStates.COMFIRM)
+            await message.answer("Виберіть дію:", reply_markup = confirm_deley_post_kb)
+        else:                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  
             await message.answer("Невірний формат дати.Спробуйте ще раз")
 
 

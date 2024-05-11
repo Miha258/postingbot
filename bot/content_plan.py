@@ -6,49 +6,48 @@ from datetime import timedelta
 from states import ContentPlan
 from posting import process_new_post, edit_post
 from keyboards import *
-from re import search
+from utils import parse_date
 from utils import IsAdminFilter, IsChannel
 
 
 async def plan_post(callback_query: types.CallbackQuery, state: FSMContext):
-    async with state.proxy() as data:
-        data['date'] = (datetime.datetime.now() + timedelta(data['date_offset'])).date()
-        message = callback_query.message
-        await message.delete_reply_markup()
-        await message.answer("Введіть час у форматі і виберіть дату: <b>00:00</b> або <b>00 00</b>", parse_mode = "html", reply_markup = get_calendar().add(back_to_edit.inline_keyboard[0][0]))
-        await state.set_state(ContentPlan.CHOOSE_DATE)
+    message = callback_query.message
+    await message.delete_reply_markup()
+    await message.answer(
+"""Введіть час у форматі або виберіть дату: 
+<strong>
+18 01
+18 01 16
+18:01 16 8
+18 01 16.08
+18 01 16.8
+18 01 16 8 2020
+18:01 16.8.2020
+</strong>""", parse_mode = "html", reply_markup = get_calendar().add(back_to_edit.inline_keyboard[0][0]))
+    await state.set_state(ContentPlan.CHOOSE_DATE)
 
 async def choose_plan_post_time(message: types.Message, state: FSMContext):
     async with state.proxy() as data:
-        date_string = message.text
-        date = data["date"]
-    
-    if len(date_string) == 4:
-        date_string = "0" + date_string 
-        
-    if search(r'\d{2}:\d{2}', date_string) or search(r'\d{2} \d{2}', date_string):
-        if ':' in date_string:
-            time = datetime.datetime.strptime(date_string, "%H:%M").time()
+        date_str = message.text
+        date = data.get("date")
+        date = parse_date(date_str, date)
+        if date:
+            if date <= datetime.datetime.now():
+                return await message.answer(f"Недійсна дата.Спробуйте ще раз")  
+            await process_new_post(message, state, date)
         else:
-            time = datetime.datetime.strptime(date_string, "%H %M").time()
-        date_time = datetime.datetime.combine(date, time)
-        if date_time <= datetime.datetime.now():
-            return await message.answer(f"Недійсна дата.Спробуйте ще раз")  
-        await process_new_post(message, state, date_time)
-    else:
-        await message.answer("Невірний формат дати.Спробуйте ще раз")
+            await message.answer(f"Невірний формат.Спробуйте ще раз")  
 
 
 async def choose_plan_post_time_by_button(callback_data: types.CallbackQuery, state: FSMContext):
-    async with state.proxy() as data:
-        date_string = callback_data.data.split('_')[-1]
-        date = datetime.datetime.strptime(date_string, "%Y-%m-%d %H:%M:%S")
-        now = datetime.datetime.now()
-        new_date = datetime.datetime(year=now.year, month=now.month, day=now.day,
-                             hour=date.hour, minute=date.minute, second=date.second)
-        if new_date <= now:
-            return await callback_data.answer(f"Недійсна дата.Спробуйте іншу", show_alert = True)  
-        await process_new_post(callback_data.message, state, new_date)
+    date_string = callback_data.data.split('_')[-1]
+    date = datetime.datetime.strptime(date_string, "%Y-%m-%d %H:%M:%S")
+    now = datetime.datetime.now()
+    new_date = datetime.datetime(year=now.year, month=now.month, day=now.day,
+                            hour=date.hour, minute=date.minute, second=date.second)
+    if new_date <= now:
+        return await callback_data.answer(f"Недійсна дата.Спробуйте іншу", show_alert = True)  
+    await process_new_post(callback_data.message, state, new_date)
 
 
 async def set_day(callback_query: types.CallbackQuery, state: FSMContext):
@@ -75,7 +74,6 @@ async def set_full_calendar_month(callback_query: types.CallbackQuery, state: FS
         add = index + 1 if callback_query.data == "next_month" else index - 1
         data["calendar"] = add
         await callback_query.message.edit_reply_markup(get_calendar(add))
-
 
 async def content_plan_list(message: types.Message, state: FSMContext):
     await state.finish()
@@ -105,7 +103,7 @@ async def handle_planed_post_editing(callback_query: types.CallbackQuery, state:
             message = callback_query.message
             await edit_post(message, state, post_id)
         case "change_planed_post_schedule":
-            await callback_query.message.answer("Введіть час у форматі і виберіть дату: <b>00:00</b>", parse_mode = "html", reply_markup = get_calendar())
+            await callback_query.message.answer("Виберіть дату публікації поста або введіть її в форматі: <b>18:01\n18 01\n18:01 16 8\n18 01 16.8.2020\n18 01 16 8 2020</b>", parse_mode = "html", reply_markup = get_calendar())
             await state.set_data({"post_id": post_id})
             await state.set_state(ContentPlan.DATE)
         case "remove_planned_post":
@@ -117,28 +115,18 @@ async def handle_planed_post_editing(callback_query: types.CallbackQuery, state:
 async def edit_post_date(message: types.Message, state: FSMContext):
     async with state.proxy() as data:
         post_id = data['post_id']
-        date_time_regex = r'\d{2}:\d{2}'
-        date_string = message.text
+        date_str = message.text
         date = data.get("date")
         
-        if not date:
-            return await message.answer("Ви не вибрали дату")
-
-        if len(date_string) == 4:
-            date_string = "0" + date_string 
+        date = parse_date(date_str, date)
+        if date <= datetime.datetime.now():
+            return await message.answer(f"Недійсна дата.Спробуйте ще раз")  
         
-        if search(date_time_regex, date_string):
-            time = datetime.datetime.strptime(date_string, "%H:%M").time()
-            date = datetime.datetime.combine(date, time)
-            if date <= datetime.datetime.now():
-                return await message.answer(f"Недійсна дата.Спробуйте ще раз")  
-            
-            data["delay"] = date
-            await Posts.update("id", post_id, delay = date)
-            await message.answer('У цьому розділі ви можете переглядати та редагувати всі заплановані публікації у своїх проектах. Виберіть канал для перегляду контент-плану:', reply_markup = await get_plan_kb(await Posts.get('channel_id', get_channel(), True), date))
-            await state.set_state(ContentPlan.CHOOSE_DAY)
-        else:
-            await message.answer("Невірний формат дати.Спробуйте ще раз")
+        data["delay"] = date
+        await Posts.update("id", post_id, delay = date)
+        await message.answer('У цьому розділі ви можете переглядати та редагувати всі заплановані публікації у своїх проектах. Виберіть канал для перегляду контент-плану:', reply_markup = await get_plan_kb(await Posts.get('channel_id', get_channel(), True), date))
+        await state.set_state(ContentPlan.CHOOSE_DAY)
+
 
 def register_content_plan(dp: Dispatcher):
     dp.register_message_handler(content_plan_list, lambda m: m.text == "Контент-план", IsAdminFilter(), IsChannel(), state = '*')

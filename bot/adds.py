@@ -230,7 +230,7 @@ async def send_add_to_user(user_kb: InlineKeyboardMarkup, add: dict[str]):
                 chat = await bot.get_chat(channel)
                 await bot.send_message(owner_id, f"Невдалося відправити повідомлення для {chat.mention}")
         else:
-            await bot.send_message(owner_id, "Розсилка відбулася успішно.Кількість надсилань: <b>{counter}</b>", reply_markup = main_menu(), parse_mode = "html")
+            await bot.send_message(owner_id, f"Розсилка відбулася успішно.Кількість надсилань: <b>{counter}</b>", reply_markup = main_menu(), parse_mode = "html")
     else:
         await bot.send_message(owner_id, "База даних бота пуста.Спробуйте пізніше", reply_markup = main_menu())
 

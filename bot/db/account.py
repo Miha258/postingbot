@@ -50,6 +50,8 @@ class Table:
         await posting.delete_record(cls.table, id)
 
 
+class Admins(Table):
+    table = "admins"
 
 class Bots(Table):
     table = "bots"

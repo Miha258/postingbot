@@ -13,6 +13,7 @@ class BotStates(StatesGroup):
     AMOUNT = State()
     TIMEOUT = State()
     CHANGE_POST = State()
+    
 
 class BotAdds(StatesGroup):
     EDITING = State()
@@ -57,3 +58,8 @@ class CustomGreetSatates(StatesGroup):
     EDIT_TEXT = State()
     EDIT_MEDIA = State()
     GREET_EDITING = State()
+
+
+class AdminsStates(StatesGroup):
+    ADD_ADMIN = State()
+    REMOVE_ADMIN = State()

@@ -8,6 +8,7 @@ from request import register_request
 from greet import register_greet
 from posting import register_posting
 from adds import register_adds
+from admins import register_admins
 from content_plan import register_content_plan
 from channels import register_channels, IsAdminFilter
 from aiogram.dispatcher import FSMContext
@@ -25,19 +26,19 @@ async def start_command(message: types.Message, state: FSMContext):
     await message.reply(""" 
     Цей бот призначений особисто для вас і призначений для планування відкладених публікацій. Використовуйте його для створення привабливих записів у вашому каналі або чаті.
 Для початку роботи скористайтесь меню або командами.
-        """, reply_markup = main_menu())
+        """, reply_markup = main_menu(message.from_id))
 
 
 @dp.callback_query_handler(CallbackData("back_to_menu").filter(), state = "*")
 async def back_to_menu(callback_query: types.CallbackQuery, state: FSMContext):
     await callback_query.message.delete()
-    await callback_query.message.answer("Використовуйте кнопки нижче:", reply_markup = main_menu())
+    await callback_query.message.answer("Використовуйте кнопки нижче:", reply_markup = main_menu(callback_query.from_user.id))
     await state.finish()
 
 
 @dp.message_handler(lambda m: m.text == "Повернутися в меню", state = "*")
 async def back_to_menu(message: types.Message, state: FSMContext):
-    await message.answer("Використовуйте кнопки нижче:", reply_markup = main_menu())
+    await message.answer("Використовуйте кнопки нижче:", reply_markup = main_menu(message.from_id))
     await state.finish()
 
 
@@ -50,6 +51,7 @@ if __name__ == '__main__':
         register_posting(dp)
         register_content_plan(dp)
   
+    register_admins(dp)
     register_paynaments(dp)
     register_channels(dp)
     executor.start_polling(dp, skip_updates = True)
