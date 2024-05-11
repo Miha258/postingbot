@@ -5,7 +5,7 @@ from aiogram.dispatcher.filters.state import State, StatesGroup
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, KeyboardButton
 from aiogram.dispatcher import FSMContext
 from aiogram import executor
-from bot.db.account import Bots, Paynaments, Channels, Users, Posts, Greetings, Adds
+from bot.db.account import Bots, Paynaments, Channels, Users, Posts, Greetings, Adds, Admins
 import logging
 from os import kill
 
@@ -85,7 +85,7 @@ async def set_type(message: types.Message, state: FSMContext):
     await state.set_state(BotStates.TOKEN) 
     await message.answer(f'<b>Введіть токен вашого бота:</b>', parse_mode = "html")
 
-    
+
 @dp.message_handler(state = BotStates.TOKEN)
 async def process_newbot_token(message: types.Message, state: FSMContext):
     data = await state.get_data()
@@ -187,7 +187,7 @@ async def start_bots(_):
         "id": "INT",
         "bot_id": "INT"
     })
-
+    
     await Greetings.init_table({
         "id": "INT",
         "bot_id": "INT",
@@ -215,8 +215,10 @@ async def start_bots(_):
         "delay": "DATE",
         "media": "TEXT",
         "autodelete": "DATE",
-        "is_published": "BOOLEAN"
+        "is_published": "BOOLEAN",
+        "preview": "BOOLEAN"
     })
+    
     await Adds.init_table({
         "id": "INT",
         "bot_id": "INT",
@@ -225,6 +227,12 @@ async def start_bots(_):
         "buttons": "TEXT",
         "media": "TEXT",
         "is_published": "BOOLEAN"
+    })
+
+    await Admins.init_table({
+        "id": "INT",
+        "username": "TEXT",
+        "bot_id": "INT"
     })
     
     user_bots = await Bots.all()
