@@ -20,5 +20,5 @@ else
   echo "Processes have been killed."
 fi
 
-nohup python3 main.py &
+nohup python3.11 main.py &
 echo ps aux | grep "$TARGET_PROCESS"
