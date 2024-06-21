@@ -2,7 +2,7 @@ from db.account import Admins, Channels
 from aiogram.dispatcher import FSMContext
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram import types, Dispatcher
-from create_bot import bot, owner
+from create_bot import bot, owner, set_channel
 from states import AdminsStates
 from utils import IsOwnerFilter
 
@@ -126,6 +126,7 @@ async def edit_admin_permissions(callback_data: types.CallbackQuery):
         case 'set':
             channels.append(channel)
         case 'remove':
+            set_channel(int(admin_id), "")
             channels.remove(channel)
     await Admins.update('id', admin_id, channels = ','.join(channels))
     await callback_data.message.edit_reply_markup(reply_markup = await get_permissions_kb(admin_id))
