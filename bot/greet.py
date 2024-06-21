@@ -22,8 +22,8 @@ options = {
 back_to_custom_greet_menu_kb = lambda greet_id: InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton('Повернутися', callback_data = f"back_to_edit_greet_menu_{greet_id}")]])
 back_to_custom_capcha_menu_kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton('Повернутися', callback_data = f"back_to_custom_capcha_menu")]])
 
-def get_greet_options_kb():
-    channel = get_channel()
+def get_greet_options_kb(user_id):
+    channel = get_channel(user_id)
     options_list = list(options.items())
     options_list.pop()
     kb = InlineKeyboardMarkup(inline_keyboard = [
@@ -35,8 +35,8 @@ def get_greet_options_kb():
     kb.add(InlineKeyboardButton("💌 Повідомлення", callback_data = "set_greet_text"))
     return kb
 
-async def custom_greatings_kb():
-    greetings = await Greetings.get('channel_id', get_channel(), True)
+async def custom_greatings_kb(user_id):
+    greetings = await Greetings.get('channel_id', get_channel(user_id), True)
     kb = InlineKeyboardMarkup()
     if greetings:
         for greet in greetings:
@@ -101,12 +101,12 @@ async def edit_custom_greating_kb(greet_id: int):
 
 async def greet_menu(message: types.Message, state: FSMContext):
     await state.finish()
-    channel = get_channel()
+    channel = get_channel(message.from_id)
     if not channels.get(channel):
         channels[channel] = {
             "types": []
         }
-    await message.answer('Виберіть опцію:', reply_markup = get_greet_options_kb(), parse_mode = 'html')
+    await message.answer('Виберіть опцію:', reply_markup = get_greet_options_kb(message.from_id), parse_mode = 'html')
 
 
 async def option_handler(callback_query: types.CallbackQuery):
@@ -116,7 +116,7 @@ async def option_handler(callback_query: types.CallbackQuery):
         if type == "chatgpt" and not bot["subscription"]:
             return await callback_query.answer("Ця функці доступна лише після покупки тарифу", show_alert = True)
     
-    channel = get_channel()
+    channel = get_channel(callback_query.from_user.id)
     if type == 'bot_checking':
         _channel = await Channels.get("chat_id", channel)
         capcha = _channel['capcha']
@@ -136,13 +136,13 @@ async def option_handler(callback_query: types.CallbackQuery):
 💌 Повідомлення
 
 Налаштовуй повідомлення, які отримає користувач при взаємодії з підключеним каналом.
-    """, reply_markup = await custom_greatings_kb())
+    """, reply_markup = await custom_greatings_kb(callback_query.from_user.id))
     else:
-        await callback_query.message.edit_reply_markup(get_greet_options_kb())
+        await callback_query.message.edit_reply_markup(get_greet_options_kb(callback_query.from_user.id))
 
 
 async def change_bot_checking_status(callback_query: types.CallbackQuery, state: FSMContext):
-    channel = get_channel()
+    channel = get_channel(callback_query.from_user.id)
     type = "bot_checking"
     if type in channels[channel]['types']:
         channels[channel]['types'].remove(type)
@@ -178,7 +178,7 @@ async def update_bot_checking_text(message: types.Message, state: FSMContext):
         await message.answer('Невірний формат капчі.Cпробуйте ще раз:')
     else:
         capcha_answers[reply] = answer
-        channel = get_channel()
+        channel = get_channel(message.from_id)
         channel_id = (await Channels.get("chat_id", channel))['id']
         capcha = (await Channels.update("id", channel_id, capcha = message.text))['capcha']
         capcha_text, capcha_btns = capcha.split(' - ')
@@ -187,7 +187,7 @@ async def update_bot_checking_text(message: types.Message, state: FSMContext):
     
 
 async def back_to_greet_menu(callback_query: types.CallbackQuery, state: FSMContext):
-    channel = get_channel()
+    channel = get_channel(callback_query.from_user.id)
     if not channels.get(channel):
         channels[channel] = {
             "types": []
@@ -227,7 +227,7 @@ async def check_capcha(message: types.Message, state: FSMContext):
     if not await Users.get('id', message.from_id):
         await Users(message.from_id, bot_id = bot.id)()
     
-    channel = get_channel()
+    channel = get_channel(message.from_id)
     capcha = (await Channels.get("chat_id", channel))['capcha']
     capcha_btns = capcha.split(' - ')[1]
     capcha_answers = {}
@@ -335,13 +335,13 @@ async def procces_custom_greet(message: types.Message, state: FSMContext):
         media_data = None
         if media:
             media_data = media.mime_type + '/' + media.file_id
-        await Greetings(message.message_id, bot_id = bot.id, greet_text = greet_text, channel_id = get_channel(), autodelete = 0, delay = 0, buttons = buttons, image = media_data)()
+        await Greetings(message.message_id, bot_id = bot.id, greet_text = greet_text, channel_id = get_channel(message.from_id), autodelete = 0, delay = 0, buttons = buttons, image = media_data)()
         await message.answer(
         """
 💌 Повідомлення
 
 Налаштовуй повідомлення, які отримає користувач при взаємодії з підключеним каналом.
-        """, reply_markup = await custom_greatings_kb())
+        """, reply_markup = await custom_greatings_kb(message.from_id))
         await state.finish()
 
 
@@ -418,7 +418,7 @@ async def edit_custom_greet_handler(callback_query: types.CallbackQuery, state: 
 💌 Повідомлення
 
 Налаштовуй повідомлення, які отримає користувач при взаємодії з підключеним каналом.
-            """, reply_markup = await custom_greatings_kb())
+            """, reply_markup = await custom_greatings_kb(message.from_id))
             await state.finish()
 
 async def back_to_edit_greet_menu(callback_query: types.CallbackQuery, state: FSMContext):
@@ -528,7 +528,7 @@ async def delete_greet(callback_query: types.CallbackQuery, state: FSMContext):
 💌 Повідомлення
 
 Налаштовуй повідомлення, які отримає користувач при взаємодії з підключеним каналом.
-    """, reply_markup = await custom_greatings_kb())
+    """, reply_markup = await custom_greatings_kb(callback_query.from_user.id))
     await state.finish()
 
 

@@ -63,3 +63,4 @@ class CustomGreetSatates(StatesGroup):
 class AdminsStates(StatesGroup):
     ADD_ADMIN = State()
     REMOVE_ADMIN = State()
+    EDIT_ADMIN = State()

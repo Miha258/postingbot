@@ -286,9 +286,9 @@ async def show_adds_plan(callback_query: types.CallbackQuery, state: FSMContext)
     await state.finish()
     date = datetime.datetime.now()
     await message.answer('У цьому розділі ви можете переглядати та редагувати всі заплановані публікації у своїх проектах. Виберіть канал для перегляду контент-плану:',
-    reply_markup = await get_plan_kb(await Adds.get('bot_id', get_channel(), True), date))
+    reply_markup = await get_plan_kb(await Adds.get('bot_id', get_channel(callback_query.from_user.id), True), date))
     await state.set_data({'date_offset': 0})
-    await state.set_state(BotAdds.CHOOSE_DATE())
+    await state.set_state(BotAdds.CHOOSE_DATE)
 
 def register_adds(dp: Dispatcher):
     asyncio.get_event_loop().create_task(adds_manager())

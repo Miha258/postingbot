@@ -129,7 +129,10 @@ def get_kb():
 
 async def send_editible_template(message: types.Message):
     media = data.get('media')
+    watermark = data.get('watermark')
     kb = get_kb()
+
+    text = data["text"] + "\n\n" + watermark  if watermark else data["text"]
     if media:
         if len(media) > 1:
             media_group = types.MediaGroup()
@@ -148,35 +151,35 @@ async def send_editible_template(message: types.Message):
                             media_group.attach_video(file_id)
 
             await message.answer_media_group(media_group)
-            await message.answer(data["text"], parse_mode = data.get("parse_mode"), reply_markup = kb)
+            await message.answer(text, parse_mode = data.get("parse_mode"), reply_markup = kb)
         elif len(media) == 1:
             media = media[0]
             media_type = type(media)
             match media_type:
                 case types.PhotoSize:
-                    await message.answer_photo(media.file_id, caption = data["text"], parse_mode = data.get("parse_mode"), reply_markup = kb)
+                    await message.answer_photo(media.file_id, caption = text, parse_mode = data.get("parse_mode"), reply_markup = kb)
                 case types.Video:
-                    await message.answer_video(media.file_id, caption = data["text"], parse_mode = data.get("parse_mode"), reply_markup = kb)
+                    await message.answer_video(media.file_id, caption = text, parse_mode = data.get("parse_mode"), reply_markup = kb)
                 case types.Animation:
-                    await message.answer_animation(media.file_id, caption = data["text"], parse_mode = data.get("parse_mode"), reply_markup = kb)
+                    await message.answer_animation(media.file_id, caption = text, parse_mode = data.get("parse_mode"), reply_markup = kb)
                 case str:
                     print(media)
                     file_type, file_id = media.split('/')
                     match file_type:
                         case 'photos':
-                            await message.answer_photo(file_id, caption = data["text"], parse_mode = data.get("parse_mode"), reply_markup = kb)
+                            await message.answer_photo(file_id, caption = text, parse_mode = data.get("parse_mode"), reply_markup = kb)
                         case 'videos':
-                            await message.answer_video(file_id, caption = data["text"], parse_mode = data.get("parse_mode"), reply_markup = kb)
+                            await message.answer_video(file_id, caption = text, parse_mode = data.get("parse_mode"), reply_markup = kb)
                         case 'animations':
-                            await message.answer_animation(file_id, caption = data["text"], parse_mode = data.get("parse_mode"), reply_markup = kb)
+                            await message.answer_animation(file_id, caption = text, parse_mode = data.get("parse_mode"), reply_markup = kb)
     else:
         if data.get("text"):
-            await message.answer(data["text"], parse_mode = data.get("parse_mode"), reply_markup = kb, disable_web_page_preview = data.get('preview'))
+            await message.answer(text, parse_mode = data.get("parse_mode"), reply_markup = kb, disable_web_page_preview = data.get('preview'))
 
 
 async def process_new_post(message: types.Message, state: FSMContext, delay: datetime.datetime = None):
     await state.finish()
-    channel = await Channels.get('chat_id', get_channel())
+    channel = await Channels.get('chat_id', get_channel(message.from_id))
     data.clear()
     data["text"] = None
     data["watermark"] = channel['watermark'] if channel else None
@@ -368,7 +371,7 @@ async def comments_handler(callback_query: types.CallbackQuery, state: FSMContex
 
 async def add_watermark_handler(message: types.Message, state: FSMContext):
     data["watermark"] = message.md_text if data.get('parse_mode') == types.ParseMode.MARKDOWN else message.html_text
-    id = (await Channels.get('chat_id', get_channel()))["id"]
+    id = (await Channels.get('chat_id', get_channel(message.from_id)))["id"]
     await Channels.update("id", id, watermark = data["watermark"])
     
     await send_editible_template(message)
@@ -495,7 +498,7 @@ async def comfirm_delay_post(callback_query: types.CallbackQuery, state: FSMCont
         await Posts.save_post(
             message.message_id, 
             bot.id,
-            get_channel(),
+            get_channel(callback_query.from_user.id),
             data.get('text'),
             data.get("hidden_extension_text_1"),
             data.get("hidden_extension_text_2"),
@@ -520,7 +523,6 @@ async def comfirm_delay_post(callback_query: types.CallbackQuery, state: FSMCont
 
 
 async def send_post(user_kb: InlineKeyboardMarkup, channel: str = None, _data: dict = None) -> types.Message:
-    channel = channel or get_channel()
     post_data = _data if _data else data
     disable_notification = not post_data.get("notify")
     disable_web_page_preview = post_data.get("preview")
@@ -609,8 +611,8 @@ async def create_post(callback_query: types.CallbackQuery, state: FSMContext):
 
         user_kb = get_user_kb(data)
         message = callback_query.message
-        channel = get_channel()
-        post = await send_post(user_kb)
+        channel = get_channel(callback_query.from_user.id)
+        post = await send_post(user_kb, channel)
         media = data.get('media')
         await message.answer(f'<b><a href="{post.url}">Пост</a> успішно опублікований!</b>', parse_mode = 'html', reply_markup = make_new_post_kb)
         await Posts.save_post(

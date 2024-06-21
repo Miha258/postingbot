@@ -28,7 +28,7 @@ kb = InlineKeyboardMarkup(inline_keyboard = [
 
 async def mode_selector(message: types.Message, state: FSMContext):
     await state.finish()
-    channel = get_channel()
+    channel = get_channel(message.from_id)
     if not channels.get(channel):
         channels[channel] = {"type": "off", "requests": [], "delay": None}
     type = next((key for key, value in options.items() if value == channels[channel]["type"]), None)
@@ -43,7 +43,7 @@ async def option_handler(callback_query: types.CallbackQuery, state: FSMContext)
             await callback_query.answer("Ця функці доступна лише після покупки тарифу", show_alert = True)
             return
 
-    channel = get_channel()
+    channel = get_channel(callback_query.from_user.id)
     if not channels.get(channel):
         channels[channel] = {"type": "off", "requests": []}
     
@@ -87,7 +87,7 @@ async def disable_request(request: types.ChatJoinRequest):
 
 async def set_amount(message: types.Message, state: FSMContext):
     try:
-        channel = get_channel()
+        channel = get_channel(message.from_id)
         requests = channels[channel]["requests"]
         to = int(message.text)
         
@@ -129,7 +129,7 @@ async def check_timeout(message: types.Message, delay: datetime, channel_id: str
 
 async def set_timeout(message: types.Message, state: FSMContext):
     try:
-        channel = get_channel()
+        channel = get_channel(message.from_id)
         current_datetime = datetime.today()
         date_time_regex = r'\d{2}:\d{2}'
         date_string = message.text

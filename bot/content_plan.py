@@ -2,7 +2,6 @@ from aiogram import types, Dispatcher
 from aiogram.dispatcher import FSMContext
 from db.account import Posts
 from create_bot import get_channel
-from datetime import timedelta
 from states import ContentPlan
 from posting import process_new_post, edit_post
 from keyboards import *
@@ -55,7 +54,11 @@ async def set_day(callback_query: types.CallbackQuery, state: FSMContext):
         date = callback_query.data.split(":")[1]
         data['date'] = datetime.datetime.strptime(date, "%Y-%m-%d").date()
         await callback_query.answer(f"Ви обрали {date}")
-
+        kb = callback_query.message.reply_markup.inline_keyboard
+        for row in kb:
+            for button in row:
+                if button.callback_data == callback_query.data:
+                    button.text = button.text + ""
 
 async def set_full_calendar_day(callback_query: types.CallbackQuery, state: FSMContext):
     async with state.proxy() as data:
@@ -65,7 +68,7 @@ async def set_full_calendar_day(callback_query: types.CallbackQuery, state: FSMC
         if data.get('post_id'):
             await callback_query.answer(f'Ви вибрали: {date.strftime("%Y-%m-%d")}')
         else:
-            await callback_query.message.edit_reply_markup(await get_plan_kb(await Posts.get('channel_id', get_channel(), True), date))
+            await callback_query.message.edit_reply_markup(await get_plan_kb(await Posts.get('channel_id', get_channel(callback_query.from_user.id), True), date))
             await state.set_state(ContentPlan.CHOOSE_DAY)
 
 async def set_full_calendar_month(callback_query: types.CallbackQuery, state: FSMContext):
@@ -79,7 +82,7 @@ async def content_plan_list(message: types.Message, state: FSMContext):
     await state.finish()
     date = datetime.datetime.now()
     await message.answer('У цьому розділі ви можете переглядати та редагувати всі заплановані публікації у своїх проектах. Виберіть канал для перегляду контент-плану:',
-    reply_markup = await get_plan_kb(await Posts.get('channel_id', get_channel(), True), date))
+    reply_markup = await get_plan_kb(await Posts.get('channel_id', get_channel(message.from_id), True), date))
     await state.set_data({'date_offset': 0})
     await state.set_state(ContentPlan.CHOOSE_DAY)
 
@@ -109,7 +112,7 @@ async def handle_planed_post_editing(callback_query: types.CallbackQuery, state:
         case "remove_planned_post":
             await Posts.delete(post_id)
             await callback_query.answer('Пост видалено')
-            await callback_query.message.answer('У цьому розділі ви можете переглядати та редагувати всі заплановані публікації у своїх проектах. Виберіть канал для перегляду контент-плану:', reply_markup = await get_plan_kb(await Posts.get('channel_id', get_channel(), True), datetime.datetime.now()))
+            await callback_query.message.answer('У цьому розділі ви можете переглядати та редагувати всі заплановані публікації у своїх проектах. Виберіть канал для перегляду контент-плану:', reply_markup = await get_plan_kb(await Posts.get('channel_id', get_channel(callback_query.from_user.id), True), datetime.datetime.now()))
             await callback_query.message.delete()
 
 async def edit_post_date(message: types.Message, state: FSMContext):
@@ -124,7 +127,7 @@ async def edit_post_date(message: types.Message, state: FSMContext):
         
         data["delay"] = date
         await Posts.update("id", post_id, delay = date)
-        await message.answer('У цьому розділі ви можете переглядати та редагувати всі заплановані публікації у своїх проектах. Виберіть канал для перегляду контент-плану:', reply_markup = await get_plan_kb(await Posts.get('channel_id', get_channel(), True), date))
+        await message.answer('У цьому розділі ви можете переглядати та редагувати всі заплановані публікації у своїх проектах. Виберіть канал для перегляду контент-плану:', reply_markup = await get_plan_kb(await Posts.get('channel_id', get_channel(message.from_id), True), date))
         await state.set_state(ContentPlan.CHOOSE_DAY)
 
 

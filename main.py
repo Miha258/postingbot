@@ -232,7 +232,8 @@ async def start_bots(_):
     await Admins.init_table({
         "id": "INT",
         "username": "TEXT",
-        "bot_id": "INT"
+        "bot_id": "INT",
+        "channels": "TEXT"
     })
     
     user_bots = await Bots.all()

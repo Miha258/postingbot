@@ -9,8 +9,9 @@ owner = sys.argv[2]
 bot_type = sys.argv[3]
 storage = MemoryStorage()
 
-def get_channel():
-    return os.environ.get("TARGET_CHANNEL")
+channels = {}
+def get_channel(user_id):
+    return channels.get(user_id)
 
-def set_channel(channel):
-    os.environ["TARGET_CHANNEL"] = channel
+def set_channel(user_id, channel):
+    channels[user_id] = channel

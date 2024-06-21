@@ -15,8 +15,8 @@ make_new_post_kb = InlineKeyboardMarkup(inline_keyboard = [
 ])
 
 confirm_post_kb = InlineKeyboardMarkup(inline_keyboard = [
-    [InlineKeyboardButton('Скасувати', callback_data = 'cancle_post')],
-    [InlineKeyboardButton('Підтвердити', callback_data = 'create_post')]
+    [InlineKeyboardButton('Підтвердити', callback_data = 'create_post')],
+    [InlineKeyboardButton('Скасувати', callback_data = 'cancle_post')]
 ])
 
 confirm_deley_post_kb = InlineKeyboardMarkup(inline_keyboard = [

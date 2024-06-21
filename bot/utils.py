@@ -41,7 +41,7 @@ class IsOwnerFilter(BoundFilter):
 
 class IsChannel(BoundFilter):
     async def check(self, message: Message) -> bool:
-        if get_channel():
+        if get_channel(message.from_id):
             return True
         else:
             await message.answer('Ви не вибрали канал, скористайтеся меню, щоб це зробити:')
