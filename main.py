@@ -243,7 +243,7 @@ async def start_bots(_):
                 token = _bot["token"]
                 owner = _bot["user_id"]
                 type = _bot["type"]
-                process = subprocess.Popen(['python3', 'bot/main.py', token, str(owner), type])
+                process = subprocess.Popen(['python3.11', 'bot/main.py', token, str(owner), type])
                 await Bots.update('id', _bot['id'], p_id = process.pid)
                 
                 bot_instance = Bot(token = token)
