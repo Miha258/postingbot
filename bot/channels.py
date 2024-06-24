@@ -44,7 +44,8 @@ async def choose_channel_handler(callback_query: types.CallbackQuery, state: FSM
         channels = []
 
     if channel_id not in channels:
-        return await callback_query.answer("У вас нема прав на використання цього каналу", show_alert = True)
+        if callback_query.from_user.id != int(owner):
+            return await callback_query.answer("У вас нема прав на використання цього каналу", show_alert = True)
     
     await callback_query.message.delete() 
     if _bot:
@@ -67,7 +68,7 @@ async def choose_channel_handler(callback_query: types.CallbackQuery, state: FSM
             await state.finish()
             return await message.answer("Схоже я був забанений у каналі.Розблокуйте мене і спробуйте ще раз")
 
-    set_channel(message.from_id, channel_id)
+    set_channel(callback_query.from_user.id, channel_id)
     await message.answer("Ви успішно вибрали канал, тепер скористайтесь меню:")
     await state.finish()
 

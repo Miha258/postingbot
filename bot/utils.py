@@ -2,7 +2,7 @@ from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, Message
 import aiohttp
 from db.account import Admins
 from aiogram.dispatcher.filters import BoundFilter
-from create_bot import owner, get_channel, bot
+from create_bot import owner, get_channel, bot, channels
 import re
 import datetime
 
